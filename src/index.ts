@@ -1,7 +1,13 @@
 import TelegramBot from "node-telegram-bot-api";
 import dotenv from "dotenv";
 import axios from "axios";
-import { AuthResponse, UserSession } from "./types";
+import {
+  AuthResponse,
+  UserSession,
+  User,
+  KYCResponse,
+  KYCStatus,
+} from "./types";
 
 // Load environment variables
 dotenv.config();
@@ -89,6 +95,132 @@ bot.onText(/\/logout/, (msg: TelegramBot.Message) => {
     bot.sendMessage(chatId, "You have been successfully logged out. 👋");
   } else {
     bot.sendMessage(chatId, "You are not logged in.");
+  }
+});
+
+// Handle /profile command
+bot.onText(/\/profile/, async (msg: TelegramBot.Message) => {
+  const chatId = msg.chat.id;
+
+  // Check if user is logged in
+  if (!sessions.has(chatId)) {
+    bot.sendMessage(
+      chatId,
+      "⚠️ You need to be logged in to view your profile.\nPlease use /login to authenticate."
+    );
+    return;
+  }
+
+  const session = sessions.get(chatId)!;
+
+  // Check if session is valid
+  if (!isSessionValid(session)) {
+    sessions.delete(chatId);
+    bot.sendMessage(
+      chatId,
+      "⚠️ Your session has expired.\nPlease use /login to authenticate again."
+    );
+    return;
+  }
+
+  try {
+    // Fetch user profile with type safety
+    const response = await axios.get<User>(`${API_BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${session.token}` },
+    });
+
+    const user = response.data;
+
+    // Format profile information
+    const profileMessage =
+      `👤 *User Profile*\n\n` +
+      `*Name*: ${user.firstName} ${user.lastName}\n` +
+      `*Email*: ${user.email}\n` +
+      `*Account Type*: ${user.type}\n` +
+      `*Status*: ${user.status}\n` +
+      `*Role*: ${user.role}`;
+
+    bot.sendMessage(chatId, profileMessage, { parse_mode: "Markdown" });
+  } catch (error) {
+    console.error("Profile fetch error:", error);
+    bot.sendMessage(
+      chatId,
+      "❌ Failed to fetch your profile information. Please try again later."
+    );
+  }
+});
+
+// Handle /kyc command
+bot.onText(/\/kyc/, async (msg: TelegramBot.Message) => {
+  const chatId = msg.chat.id;
+
+  // Check if user is logged in
+  if (!sessions.has(chatId)) {
+    bot.sendMessage(
+      chatId,
+      "⚠️ You need to be logged in to check your KYC status.\nPlease use /login to authenticate."
+    );
+    return;
+  }
+
+  const session = sessions.get(chatId)!;
+
+  // Check if session is valid
+  if (!isSessionValid(session)) {
+    sessions.delete(chatId);
+    bot.sendMessage(
+      chatId,
+      "⚠️ Your session has expired.\nPlease use /login to authenticate again."
+    );
+    return;
+  }
+
+  try {
+    // Fetch KYC status with type safety
+    const response = await axios.get<KYCResponse>(`${API_BASE_URL}/api/kycs`, {
+      headers: { Authorization: `Bearer ${session.token}` },
+    });
+
+    if (response.data.data.length === 0) {
+      bot.sendMessage(
+        chatId,
+        "📋 *KYC Status*\n\n" +
+          "You haven't started the KYC process yet.\n" +
+          "Please complete your KYC at https://copperx.io/kyc",
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    const kycData = response.data.data[0];
+    let statusMessage = "";
+
+    // Create user-friendly status message based on KYC status
+    if (kycData.status === KYCStatus.APPROVED) {
+      statusMessage =
+        "✅ Your KYC is *approved*. You have full access to all features.";
+    } else if (kycData.status === KYCStatus.REJECTED) {
+      statusMessage =
+        "❌ Your KYC has been *rejected*. Please visit https://copperx.io/kyc to resubmit.";
+    } else if (
+      kycData.status === KYCStatus.PENDING ||
+      kycData.status === KYCStatus.INITIATED
+    ) {
+      statusMessage =
+        "⏳ Your KYC is *pending review*. We'll notify you once it's approved.";
+    } else {
+      statusMessage = `🔍 Your KYC status is: *${kycData.status}*\nVisit https://copperx.io/kyc for more details.`;
+    }
+
+    bot.sendMessage(chatId, `📋 *KYC Status*\n\n${statusMessage}`, {
+      parse_mode: "Markdown",
+    });
+  } catch (error) {
+    console.error("KYC status fetch error:", error);
+    bot.sendMessage(
+      chatId,
+      "❌ Failed to fetch your KYC status. Please try again later."
+    );
   }
 });
 

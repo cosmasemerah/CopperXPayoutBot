@@ -149,6 +149,27 @@ export interface KYCDetail extends TimeStamps {
   joiningDate?: string;
 }
 
+// KYC response interface
+export interface KYCResponse {
+  page: number;
+  limit: number;
+  count: number;
+  hasMore: boolean;
+  data: Array<{
+    id: string;
+    organizationId: string;
+    status: KYCStatus;
+    type: CustomerProfileType;
+    country: string;
+    providerCode: string;
+    kycProviderCode: string;
+    kycDetailId: string;
+    kybDetailId?: string;
+    kycDetail: KYCDetail;
+    statusUpdates: string;
+  }>;
+}
+
 // Token balance Data Transfer Object
 export interface BalanceResponse {
   decimals: number; // Number of decimal places
