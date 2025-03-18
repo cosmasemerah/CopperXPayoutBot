@@ -57,6 +57,31 @@ export async function sendToWallet(
 }
 
 /**
+ * Initiate a deposit to user's wallet
+ * @param token The authentication token
+ * @param amount The amount to deposit
+ * @param chainId The chain ID (network) for the deposit
+ * @param sourceOfFunds The source of funds (default: "external")
+ * @returns Promise with deposit information
+ */
+export async function initiateDeposit(
+  token: string,
+  amount: string,
+  chainId: string,
+  sourceOfFunds: string = "external"
+): Promise<any> {
+  return await api.post(
+    "/api/transfers/deposit",
+    {
+      amount,
+      sourceOfFunds,
+      depositChainId: chainId,
+    },
+    token
+  );
+}
+
+/**
  * Get transfer history
  * @param token The authentication token
  * @param page The page number (default: 1)

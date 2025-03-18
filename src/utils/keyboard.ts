@@ -104,9 +104,10 @@ export function createMainMenuKeyboard(): TelegramBot.InlineKeyboardButton[][] {
       { text: "📤 Send", callback_data: "menu:send" },
     ],
     [
+      { text: "💵 Deposit", callback_data: "menu:deposit" },
       { text: "📋 History", callback_data: "menu:history" },
-      { text: "👤 Profile", callback_data: "menu:profile" },
     ],
+    [{ text: "👤 Profile", callback_data: "menu:profile" }],
   ];
 }
 

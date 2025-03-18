@@ -103,6 +103,22 @@ bot.on("callback_query", (query) => {
           },
         });
         break;
+
+      case "deposit":
+        // Trigger deposit command
+        bot.answerCallbackQuery(query.id);
+        bot.deleteMessage(chatId, messageId);
+        bot.processUpdate({
+          update_id: Date.now(),
+          message: {
+            message_id: Date.now(),
+            from: query.from,
+            chat: { id: chatId, type: "private" },
+            date: Math.floor(Date.now() / 1000),
+            text: "/deposit",
+          },
+        });
+        break;
     }
   }
   // Handle send menu options

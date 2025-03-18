@@ -2,7 +2,7 @@ import TelegramBot from "node-telegram-bot-api";
 import { getSession, updateSessionState, getSessionState } from "../session";
 import * as transferService from "../services/transfer.service";
 import * as walletService from "../services/wallet.service";
-import { formatAmount } from "../utils/format";
+import { formatAmount, formatAddress } from "../utils/format";
 import { createYesNoKeyboard, createAmountKeyboard } from "../utils/keyboard";
 
 // Define the SendEmailState interface for the multi-step process
@@ -18,6 +18,15 @@ interface SendWalletState {
   address?: string;
   amount?: string;
   network?: string;
+}
+
+// Define the DepositState interface for the deposit process
+interface DepositState {
+  step: "amount" | "complete";
+  amount?: string;
+  walletId?: string;
+  network?: string;
+  depositAddress?: string;
 }
 
 /**
@@ -79,6 +88,79 @@ export function registerTransferHandlers(bot: TelegramBot): void {
       currentAction: "sendwallet",
       data: { step: "address" },
     });
+  });
+
+  // Deposit command handler
+  bot.onText(/\/deposit/, async (msg: TelegramBot.Message) => {
+    const chatId = msg.chat.id;
+
+    // Check if user is logged in
+    const session = getSession(chatId);
+    if (!session) {
+      bot.sendMessage(
+        chatId,
+        "⚠️ You need to be logged in to initiate a deposit.\nPlease use /login to authenticate."
+      );
+      return;
+    }
+
+    try {
+      // Fetch default wallet
+      const defaultWallet = await walletService.getDefaultWallet(session.token);
+
+      if (!defaultWallet) {
+        bot.sendMessage(
+          chatId,
+          "⚠️ You don't have a default wallet set up.\nPlease use /setdefaultwallet to set a default wallet first."
+        );
+        return;
+      }
+
+      // Set session state for deposit flow
+      updateSessionState(chatId, {
+        currentAction: "deposit",
+        data: {
+          step: "amount",
+          walletId: defaultWallet.walletId,
+          network: defaultWallet.network,
+        },
+      });
+
+      // Get network name for display
+      const networkNames: Record<string, string> = {
+        "1": "Ethereum",
+        "10": "Optimism",
+        "56": "Binance Smart Chain",
+        "137": "Polygon",
+        "8453": "Base",
+        "42161": "Arbitrum One",
+        "23434": "Starknet",
+      };
+      const networkName =
+        networkNames[defaultWallet.network] ||
+        `Network ${defaultWallet.network}`;
+
+      // Show amount options with inline keyboard
+      bot.sendMessage(
+        chatId,
+        `💰 *Deposit to Your Wallet*\n\n` +
+          `Network: ${networkName}\n` +
+          `Default Wallet ID: \`${defaultWallet.walletId}\`\n\n` +
+          `Please select or enter an amount in USDC to deposit:`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: createAmountKeyboard("deposit"),
+          },
+        }
+      );
+    } catch (error) {
+      console.error("Default wallet fetch error:", error);
+      bot.sendMessage(
+        chatId,
+        "❌ Failed to retrieve your wallet information. Please try again later or visit the Copperx web app at https://copperx.io."
+      );
+    }
   });
 
   // Transaction history command handler
@@ -146,7 +228,7 @@ export function registerTransferHandlers(bot: TelegramBot): void {
     }
   });
 
-  // Handle the input flows (email, wallet)
+  // Handle the input flows (email, wallet, deposit)
   bot.on("message", async (msg: TelegramBot.Message) => {
     const chatId = msg.chat.id;
     const text = msg.text;
@@ -354,6 +436,121 @@ export function registerTransferHandlers(bot: TelegramBot): void {
             },
           }
         );
+      }
+    }
+    // Handle deposit flow with session state - for custom amount input
+    else if (sessionState?.currentAction === "deposit") {
+      // Make sure user is still logged in
+      const session = getSession(chatId);
+      if (!session) {
+        updateSessionState(chatId, {});
+        bot.sendMessage(
+          chatId,
+          "⚠️ Your session has expired. Please use /login to authenticate."
+        );
+        return;
+      }
+
+      const data = sessionState.data as DepositState;
+
+      // Only step where we expect text input is for custom amount
+      if (data.step === "amount") {
+        // Validate amount is a positive number
+        const amount = parseFloat(text);
+        if (isNaN(amount) || amount <= 0) {
+          bot.sendMessage(
+            chatId,
+            "❌ Invalid amount. Please enter a positive number:"
+          );
+          return;
+        }
+
+        try {
+          // Initiate deposit
+          const depositResponse = await transferService.initiateDeposit(
+            session.token,
+            text,
+            data.network!
+          );
+
+          // Update state
+          updateSessionState(chatId, {
+            currentAction: "deposit",
+            data: {
+              step: "complete",
+              amount: text,
+              walletId: data.walletId,
+              network: data.network,
+              depositAddress:
+                depositResponse.walletAddress || depositResponse.depositAddress,
+            },
+          });
+
+          // Format network for display
+          const networkNames: Record<string, string> = {
+            "1": "Ethereum",
+            "10": "Optimism",
+            "56": "Binance Smart Chain",
+            "137": "Polygon",
+            "8453": "Base",
+            "42161": "Arbitrum One",
+            "23434": "Starknet",
+          };
+          const networkName =
+            networkNames[data.network!] || `Network ${data.network}`;
+
+          // Show deposit instructions
+          const depositAddress =
+            depositResponse.walletAddress || depositResponse.depositAddress;
+
+          if (depositAddress) {
+            bot.sendMessage(
+              chatId,
+              `✅ *Deposit Setup Complete*\n\n` +
+                `Amount: ${text} USDC\n` +
+                `Network: ${networkName}\n` +
+                `Deposit Address: \`${depositAddress}\`\n\n` +
+                `Please send exactly ${text} USDC to the address above.\n` +
+                `Your account will be credited once the transaction is confirmed on the blockchain.\n\n` +
+                `You will receive a notification when your deposit is received.`,
+              { parse_mode: "Markdown" }
+            );
+          } else if (depositResponse.paymentUrl) {
+            bot.sendMessage(
+              chatId,
+              `✅ *Deposit Setup Complete*\n\n` +
+                `Amount: ${text} USDC\n` +
+                `Network: ${networkName}\n\n` +
+                `Please use the following payment link to complete your deposit:\n` +
+                `${depositResponse.paymentUrl}\n\n` +
+                `Your account will be credited once the payment is complete.\n\n` +
+                `You will receive a notification when your deposit is received.`,
+              { parse_mode: "Markdown" }
+            );
+          } else {
+            // Generic success if we don't have specific deposit instructions
+            bot.sendMessage(
+              chatId,
+              `✅ *Deposit Initiated*\n\n` +
+                `Amount: ${text} USDC\n` +
+                `Network: ${networkName}\n\n` +
+                `Please check the Copperx web app for complete deposit instructions.\n\n` +
+                `You will receive a notification when your deposit is received.`,
+              { parse_mode: "Markdown" }
+            );
+          }
+        } catch (error) {
+          console.error("Deposit initiation error:", error);
+          updateSessionState(chatId, {}); // Clear session state
+          bot.sendMessage(
+            chatId,
+            "❌ *Deposit Setup Failed*\n\n" +
+              "We couldn't initiate your deposit at this time. Please try again later " +
+              "or visit the Copperx web app to complete your deposit.\n\n" +
+              "https://copperx.io",
+            { parse_mode: "Markdown" }
+          );
+        }
       }
     }
   });
@@ -629,6 +826,150 @@ export function registerTransferHandlers(bot: TelegramBot): void {
               "The transfer could not be completed. Please check your balance " +
               "and ensure the recipient address and network are correct.\n\n" +
               "Use /balance to check your available funds.",
+            {
+              chat_id: chatId,
+              message_id: messageId,
+              parse_mode: "Markdown",
+            }
+          );
+        }
+      }
+      // Handle cancellation
+      else if (action === "cancel") {
+        bot.answerCallbackQuery(query.id, { text: "Operation cancelled" });
+        updateSessionState(chatId, {});
+        bot.deleteMessage(chatId, messageId);
+      }
+    }
+    // Handle deposit flow callbacks
+    else if (callbackData.startsWith("deposit:")) {
+      const parts = callbackData.split(":");
+      const action = parts[1];
+      const sessionState = getSessionState(chatId);
+
+      if (!sessionState || sessionState.currentAction !== "deposit") {
+        bot.answerCallbackQuery(query.id, {
+          text: "This operation is no longer active.",
+          show_alert: true,
+        });
+        return;
+      }
+
+      const data = sessionState.data as DepositState;
+
+      // Handle amount selection
+      if (action === "amount") {
+        const amount = parts[2];
+
+        if (amount === "custom") {
+          // Ask for custom amount
+          bot.answerCallbackQuery(query.id);
+          bot.editMessageText(
+            `💰 *Deposit to Your Wallet*\n\nPlease enter a custom amount in USDC:`,
+            {
+              chat_id: chatId,
+              message_id: messageId,
+              parse_mode: "Markdown",
+            }
+          );
+          return;
+        }
+
+        try {
+          // Initiate deposit with selected amount
+          const depositResponse = await transferService.initiateDeposit(
+            session.token,
+            amount,
+            data.network!
+          );
+
+          // Update state
+          updateSessionState(chatId, {
+            currentAction: "deposit",
+            data: {
+              step: "complete",
+              amount: amount,
+              walletId: data.walletId,
+              network: data.network,
+              depositAddress:
+                depositResponse.walletAddress || depositResponse.depositAddress,
+            },
+          });
+
+          // Format network for display
+          const networkNames: Record<string, string> = {
+            "1": "Ethereum",
+            "10": "Optimism",
+            "56": "Binance Smart Chain",
+            "137": "Polygon",
+            "8453": "Base",
+            "42161": "Arbitrum One",
+            "23434": "Starknet",
+          };
+          const networkName =
+            networkNames[data.network!] || `Network ${data.network}`;
+
+          // Acknowledge callback
+          bot.answerCallbackQuery(query.id);
+
+          // Show deposit instructions
+          const depositAddress =
+            depositResponse.walletAddress || depositResponse.depositAddress;
+
+          if (depositAddress) {
+            bot.editMessageText(
+              `✅ *Deposit Setup Complete*\n\n` +
+                `Amount: ${amount} USDC\n` +
+                `Network: ${networkName}\n` +
+                `Deposit Address: \`${depositAddress}\`\n\n` +
+                `Please send exactly ${amount} USDC to the address above.\n` +
+                `Your account will be credited once the transaction is confirmed on the blockchain.\n\n` +
+                `You will receive a notification when your deposit is received.`,
+              {
+                chat_id: chatId,
+                message_id: messageId,
+                parse_mode: "Markdown",
+              }
+            );
+          } else if (depositResponse.paymentUrl) {
+            bot.editMessageText(
+              `✅ *Deposit Setup Complete*\n\n` +
+                `Amount: ${amount} USDC\n` +
+                `Network: ${networkName}\n\n` +
+                `Please use the following payment link to complete your deposit:\n` +
+                `${depositResponse.paymentUrl}\n\n` +
+                `Your account will be credited once the payment is complete.\n\n` +
+                `You will receive a notification when your deposit is received.`,
+              {
+                chat_id: chatId,
+                message_id: messageId,
+                parse_mode: "Markdown",
+              }
+            );
+          } else {
+            // Generic success if we don't have specific deposit instructions
+            bot.editMessageText(
+              `✅ *Deposit Initiated*\n\n` +
+                `Amount: ${amount} USDC\n` +
+                `Network: ${networkName}\n\n` +
+                `Please check the Copperx web app for complete deposit instructions.\n\n` +
+                `You will receive a notification when your deposit is received.`,
+              {
+                chat_id: chatId,
+                message_id: messageId,
+                parse_mode: "Markdown",
+              }
+            );
+          }
+        } catch (error) {
+          console.error("Deposit initiation error:", error);
+          updateSessionState(chatId, {}); // Clear session state
+          bot.answerCallbackQuery(query.id);
+          bot.editMessageText(
+            "❌ *Deposit Setup Failed*\n\n" +
+              "We couldn't initiate your deposit at this time. Please try again later " +
+              "or visit the Copperx web app to complete your deposit.\n\n" +
+              "https://copperx.io",
             {
               chat_id: chatId,
               message_id: messageId,
