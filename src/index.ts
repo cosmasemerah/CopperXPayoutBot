@@ -7,6 +7,7 @@ import {
   User,
   KYCResponse,
   KYCStatus,
+  WalletBalance,
 } from "./types";
 
 // Load environment variables
@@ -36,11 +37,30 @@ interface OTPState {
   sid: string;
 }
 
+// Store wallet ID input state
+const awaitingWalletId = new Map<number, boolean>();
+
 const awaitingEmail = new Map<number, boolean>();
 const awaitingOTP = new Map<number, OTPState>();
 
 // Base API URL
 const API_BASE_URL = "https://income-api.copperx.io";
+
+// Network ID to name mapping
+const networkNames: Record<string, string> = {
+  "1": "Ethereum Mainnet",
+  "10": "Optimism Mainnet",
+  "56": "Binance Smart Chain Mainnet",
+  "137": "Polygon Mainnet",
+  "8453": "Base Mainnet",
+  "42161": "Arbitrum One Mainnet",
+  "23434": "Starknet",
+};
+
+// Function to get network name from ID
+function getNetworkName(networkId: string): string {
+  return networkNames[networkId] || `Network ${networkId}`;
+}
 
 // Function to check if a session is valid
 function isSessionValid(session: UserSession): boolean {
@@ -224,13 +244,217 @@ bot.onText(/\/kyc/, async (msg: TelegramBot.Message) => {
   }
 });
 
-// Handle messages for email and OTP
+// Handle /balance command
+bot.onText(/\/balance/, async (msg: TelegramBot.Message) => {
+  const chatId = msg.chat.id;
+
+  // Check if user is logged in
+  if (!sessions.has(chatId)) {
+    bot.sendMessage(
+      chatId,
+      "⚠️ You need to be logged in to view your wallet balances.\nPlease use /login to authenticate."
+    );
+    return;
+  }
+
+  const session = sessions.get(chatId)!;
+
+  // Check if session is valid
+  if (!isSessionValid(session)) {
+    sessions.delete(chatId);
+    bot.sendMessage(
+      chatId,
+      "⚠️ Your session has expired.\nPlease use /login to authenticate again."
+    );
+    return;
+  }
+
+  try {
+    // Fetch wallet balances with type safety
+    const response = await axios.get<WalletBalance[]>(
+      `${API_BASE_URL}/api/wallets/balances`,
+      {
+        headers: { Authorization: `Bearer ${session.token}` },
+      }
+    );
+
+    // Log the response for debugging
+    console.log(
+      "Wallet balances API response:",
+      JSON.stringify(response.data, null, 2)
+    );
+
+    if (response.data.length === 0) {
+      bot.sendMessage(
+        chatId,
+        "💰 *Wallet Balances*\n\n" +
+          "You don't have any wallets yet.\n" +
+          "Please visit https://copperx.io to create a wallet.",
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    // Format wallet balances
+    let balanceMessage = "💰 *Wallet Balances*\n\n";
+
+    for (const wallet of response.data) {
+      // Convert network ID to readable name
+      const networkName = getNetworkName(wallet.network);
+
+      balanceMessage += `*Network*: ${networkName} (${wallet.network})\n`;
+      balanceMessage += `*Default*: ${wallet.isDefault ? "Yes" : "No"}\n`;
+      balanceMessage += `*Wallet ID*: \`${wallet.walletId}\`\n`;
+
+      if (wallet.balances.length === 0) {
+        balanceMessage += "*Balances*: No balances found\n\n";
+      } else {
+        balanceMessage += "*Balances*:\n";
+        for (const balance of wallet.balances) {
+          balanceMessage += `  • ${balance.balance} ${balance.symbol} (${balance.decimals} decimals)\n`;
+          balanceMessage += `    Address: \`${balance.address}\`\n`;
+        }
+        balanceMessage += "\n";
+      }
+    }
+
+    balanceMessage += "Use /setdefaultwallet to change your default wallet.";
+
+    bot.sendMessage(chatId, balanceMessage, { parse_mode: "Markdown" });
+  } catch (error) {
+    console.error("Wallet balances fetch error:", error);
+    bot.sendMessage(
+      chatId,
+      "❌ Failed to fetch your wallet balances. Please try again later."
+    );
+  }
+});
+
+// Handle /setdefaultwallet command
+bot.onText(/\/setdefaultwallet/, async (msg: TelegramBot.Message) => {
+  const chatId = msg.chat.id;
+
+  // Check if user is logged in
+  if (!sessions.has(chatId)) {
+    bot.sendMessage(
+      chatId,
+      "⚠️ You need to be logged in to set your default wallet.\nPlease use /login to authenticate."
+    );
+    return;
+  }
+
+  const session = sessions.get(chatId)!;
+
+  // Check if session is valid
+  if (!isSessionValid(session)) {
+    sessions.delete(chatId);
+    bot.sendMessage(
+      chatId,
+      "⚠️ Your session has expired.\nPlease use /login to authenticate again."
+    );
+    return;
+  }
+
+  // Fetch wallets first to display options
+  try {
+    const response = await axios.get<WalletBalance[]>(
+      `${API_BASE_URL}/api/wallets/balances`,
+      {
+        headers: { Authorization: `Bearer ${session.token}` },
+      }
+    );
+
+    // Log the response for debugging
+    console.log(
+      "Wallet list API response:",
+      JSON.stringify(response.data, null, 2)
+    );
+
+    if (response.data.length === 0) {
+      bot.sendMessage(
+        chatId,
+        "⚠️ You don't have any wallets yet.\nPlease visit https://copperx.io to create a wallet."
+      );
+      return;
+    }
+
+    // Display available wallets
+    let walletMessage =
+      "Please select a wallet ID to set as default by replying with the wallet ID:\n\n";
+
+    for (const wallet of response.data) {
+      // Convert network ID to readable name
+      const networkName = getNetworkName(wallet.network);
+
+      walletMessage += `Network: ${networkName} (${wallet.network})\n`;
+      walletMessage += `Current Default: ${wallet.isDefault ? "Yes" : "No"}\n`;
+      walletMessage += `Wallet ID: ${wallet.walletId}\n\n`;
+    }
+
+    bot.sendMessage(chatId, walletMessage);
+
+    // Set awaiting wallet ID state
+    awaitingWalletId.set(chatId, true);
+  } catch (error) {
+    console.error("Wallet fetch error:", error);
+    bot.sendMessage(
+      chatId,
+      "❌ Failed to fetch your wallets. Please try again later."
+    );
+  }
+});
+
+// Handle messages for email, OTP, and wallet ID input
 bot.on("message", async (msg: TelegramBot.Message) => {
   const chatId = msg.chat.id;
   const text = msg.text;
 
   // Ignore commands
   if (!text || text.startsWith("/")) return;
+
+  // Handle wallet ID input
+  if (awaitingWalletId.get(chatId)) {
+    awaitingWalletId.delete(chatId);
+
+    if (!sessions.has(chatId)) {
+      bot.sendMessage(
+        chatId,
+        "⚠️ Your session has expired. Please use /login to authenticate."
+      );
+      return;
+    }
+
+    const session = sessions.get(chatId)!;
+
+    try {
+      // Set default wallet
+      const response = await axios.post(
+        `${API_BASE_URL}/api/wallets/default`,
+        { walletId: text },
+        {
+          headers: { Authorization: `Bearer ${session.token}` },
+        }
+      );
+
+      // Log the response for debugging
+      console.log(
+        "Set default wallet response:",
+        JSON.stringify(response.data, null, 2)
+      );
+
+      bot.sendMessage(
+        chatId,
+        "✅ Default wallet set successfully! Use /balance to view your updated wallets."
+      );
+    } catch (error) {
+      console.error("Set default wallet error:", error);
+      bot.sendMessage(
+        chatId,
+        "❌ Failed to set default wallet. Please verify the wallet ID and try again with /setdefaultwallet."
+      );
+    }
+    return;
+  }
 
   // Handle email input
   if (awaitingEmail.get(chatId)) {
@@ -323,6 +547,7 @@ bot.onText(/\/help/, (msg: TelegramBot.Message) => {
       `👤 /profile - View your profile details\n` +
       `📋 /kyc - Check your KYC status\n` +
       `💰 /balance - View your wallet balances\n` +
+      `🏦 /setdefaultwallet - Set your default wallet\n` +
       `📤 /sendemail - Send funds to an email address\n` +
       `🔔 /subscribe - Enable deposit notifications\n` +
       `❓ /help - Show this help message\n\n` +
