@@ -7,7 +7,8 @@ export interface SessionState {
     | "sendemail"
     | "setdefaultwallet"
     | "sendwallet"
-    | "deposit";
+    | "deposit"
+    | "withdrawbank";
   callbackData?: string; // For storing inline keyboard callback data
   data?: Record<string, any>; // For storing step-specific data
 }

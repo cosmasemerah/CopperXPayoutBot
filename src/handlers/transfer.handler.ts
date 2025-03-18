@@ -29,6 +29,12 @@ interface DepositState {
   depositAddress?: string;
 }
 
+// Define the WithdrawBankState interface for the bank withdrawal process
+interface WithdrawBankState {
+  step: "amount" | "confirm";
+  amount?: string;
+}
+
 /**
  * Register transfer handlers
  * @param bot The Telegram bot instance
@@ -161,6 +167,42 @@ export function registerTransferHandlers(bot: TelegramBot): void {
         "❌ Failed to retrieve your wallet information. Please try again later or visit the Copperx web app at https://copperx.io."
       );
     }
+  });
+
+  // Bank withdrawal command handler
+  bot.onText(/\/withdrawbank/, async (msg: TelegramBot.Message) => {
+    const chatId = msg.chat.id;
+
+    // Check if user is logged in
+    const session = getSession(chatId);
+    if (!session) {
+      bot.sendMessage(
+        chatId,
+        "⚠️ You need to be logged in to withdraw funds.\nPlease use /login to authenticate."
+      );
+      return;
+    }
+
+    // Set session state for withdrawal flow
+    updateSessionState(chatId, {
+      currentAction: "withdrawbank",
+      data: { step: "amount" },
+    });
+
+    // Show amount options with inline keyboard
+    bot.sendMessage(
+      chatId,
+      `🏦 *Withdraw to Bank Account*\n\n` +
+        `Please select or enter an amount in USDC to withdraw:\n\n` +
+        `_Note: Your bank account details must be configured on the Copperx platform. ` +
+        `If you haven't set up your bank account yet, please visit https://copperx.io._`,
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: createAmountKeyboard("withdrawbank"),
+        },
+      }
+    );
   });
 
   // Transaction history command handler
@@ -551,6 +593,58 @@ export function registerTransferHandlers(bot: TelegramBot): void {
             { parse_mode: "Markdown" }
           );
         }
+      }
+    }
+    // Handle bank withdrawal flow with session state - for custom amount input
+    else if (sessionState?.currentAction === "withdrawbank") {
+      // Make sure user is still logged in
+      const session = getSession(chatId);
+      if (!session) {
+        updateSessionState(chatId, {});
+        bot.sendMessage(
+          chatId,
+          "⚠️ Your session has expired. Please use /login to authenticate."
+        );
+        return;
+      }
+
+      const data = sessionState.data as WithdrawBankState;
+
+      // Only step where we expect text input is for custom amount
+      if (data.step === "amount") {
+        // Validate amount is a positive number
+        const amount = parseFloat(text);
+        if (isNaN(amount) || amount <= 0) {
+          bot.sendMessage(
+            chatId,
+            "❌ Invalid amount. Please enter a positive number:"
+          );
+          return;
+        }
+
+        // Update state and move to confirmation step
+        updateSessionState(chatId, {
+          currentAction: "withdrawbank",
+          data: {
+            step: "confirm",
+            amount: text,
+          },
+        });
+
+        // Ask for confirmation with inline keyboard
+        bot.sendMessage(
+          chatId,
+          `⚠️ *Please Confirm Bank Withdrawal*\n\n` +
+            `Amount: ${text} USDC\n\n` +
+            `Funds will be sent to your pre-configured bank account on the Copperx platform.\n` +
+            `Do you want to proceed with this withdrawal?`,
+          {
+            parse_mode: "Markdown",
+            reply_markup: {
+              inline_keyboard: createYesNoKeyboard("withdrawbank"),
+            },
+          }
+        );
       }
     }
   });
@@ -970,6 +1064,142 @@ export function registerTransferHandlers(bot: TelegramBot): void {
               "We couldn't initiate your deposit at this time. Please try again later " +
               "or visit the Copperx web app to complete your deposit.\n\n" +
               "https://copperx.io",
+            {
+              chat_id: chatId,
+              message_id: messageId,
+              parse_mode: "Markdown",
+            }
+          );
+        }
+      }
+      // Handle cancellation
+      else if (action === "cancel") {
+        bot.answerCallbackQuery(query.id, { text: "Operation cancelled" });
+        updateSessionState(chatId, {});
+        bot.deleteMessage(chatId, messageId);
+      }
+    }
+    // Handle bank withdrawal flow callbacks
+    else if (callbackData.startsWith("withdrawbank:")) {
+      const parts = callbackData.split(":");
+      const action = parts[1];
+      const sessionState = getSessionState(chatId);
+
+      if (!sessionState || sessionState.currentAction !== "withdrawbank") {
+        bot.answerCallbackQuery(query.id, {
+          text: "This operation is no longer active.",
+          show_alert: true,
+        });
+        return;
+      }
+
+      const data = sessionState.data as WithdrawBankState;
+
+      // Handle amount selection
+      if (action === "amount") {
+        const amount = parts[2];
+
+        if (amount === "custom") {
+          // Ask for custom amount
+          bot.answerCallbackQuery(query.id);
+          bot.editMessageText(
+            `🏦 *Withdraw to Bank Account*\n\nPlease enter a custom amount in USDC:`,
+            {
+              chat_id: chatId,
+              message_id: messageId,
+              parse_mode: "Markdown",
+            }
+          );
+          return;
+        }
+
+        // Update state and move to confirmation step
+        updateSessionState(chatId, {
+          currentAction: "withdrawbank",
+          data: {
+            step: "confirm",
+            amount: amount,
+          },
+        });
+
+        // Ask for confirmation
+        bot.answerCallbackQuery(query.id);
+        bot.editMessageText(
+          `⚠️ *Please Confirm Bank Withdrawal*\n\n` +
+            `Amount: ${amount} USDC\n\n` +
+            `Funds will be sent to your pre-configured bank account on the Copperx platform.\n` +
+            `Do you want to proceed with this withdrawal?`,
+          {
+            chat_id: chatId,
+            message_id: messageId,
+            parse_mode: "Markdown",
+            reply_markup: {
+              inline_keyboard: createYesNoKeyboard("withdrawbank"),
+            },
+          }
+        );
+      }
+      // Handle confirmation response
+      else if (action === "yes" || action === "no") {
+        bot.answerCallbackQuery(query.id);
+
+        if (action === "no") {
+          // Clear state and show cancellation message
+          updateSessionState(chatId, {});
+          bot.editMessageText(
+            "🚫 Withdrawal cancelled. No funds have been sent.",
+            {
+              chat_id: chatId,
+              message_id: messageId,
+            }
+          );
+          return;
+        }
+
+        // Process the withdrawal
+        try {
+          // Make API call to withdraw funds to bank
+          await transferService.withdrawToBank(session.token, data.amount!);
+
+          // Clear state and show success message
+          updateSessionState(chatId, {});
+          bot.editMessageText(
+            `✅ *Bank Withdrawal Initiated Successfully!*\n\n` +
+              `${data.amount} USDC is being processed for withdrawal to your bank account.\n\n` +
+              `This may take 1-3 business days to complete depending on your bank.\n` +
+              `Use /history to check the status of your withdrawal.`,
+            {
+              chat_id: chatId,
+              message_id: messageId,
+              parse_mode: "Markdown",
+            }
+          );
+        } catch (error) {
+          console.error("Bank withdrawal error:", error);
+
+          // Extract error message if available
+          const errorResponse = (error as any)?.response?.data;
+          let errorMessage = "The withdrawal could not be completed.";
+
+          // Check for specific error types
+          if (errorResponse?.message?.includes("KYC")) {
+            errorMessage =
+              "You need to complete KYC verification before withdrawing funds. Please visit https://copperx.io/kyc to complete your verification.";
+          } else if (errorResponse?.message?.includes("minimum")) {
+            errorMessage =
+              "The withdrawal amount is below the minimum requirement. Please try a larger amount.";
+          } else if (errorResponse?.message?.includes("bank")) {
+            errorMessage =
+              "You need to set up your bank account details first. Please visit https://copperx.io to configure your bank account.";
+          }
+
+          // Clear state and show error message
+          updateSessionState(chatId, {});
+          bot.editMessageText(
+            "❌ *Withdrawal Failed*\n\n" +
+              errorMessage +
+              "\n\n" +
+              "Use /balance to check your available funds.",
             {
               chat_id: chatId,
               message_id: messageId,

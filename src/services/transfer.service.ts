@@ -95,3 +95,28 @@ export async function getTransferHistory(
 ): Promise<any> {
   return await api.get(`/api/transfers?page=${page}&limit=${limit}`, token);
 }
+
+/**
+ * Withdraw funds to a bank account
+ * @param token The authentication token
+ * @param amount The amount to withdraw
+ * @param currency The currency code (default: "USD")
+ * @param purposeCode The purpose code (default: "withdrawal")
+ * @returns Promise with the response
+ */
+export async function withdrawToBank(
+  token: string,
+  amount: string,
+  currency: string = "USD",
+  purposeCode: string = "withdrawal"
+): Promise<any> {
+  return await api.post(
+    "/api/transfers/offramp",
+    {
+      amount,
+      currency,
+      purposeCode,
+    },
+    token
+  );
+}

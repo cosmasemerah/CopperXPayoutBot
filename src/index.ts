@@ -168,10 +168,18 @@ bot.on("callback_query", (query) => {
         break;
 
       case "bank":
-        // This will be implemented in the next phase
-        bot.answerCallbackQuery(query.id, {
-          text: "Withdraw to bank feature will be available soon!",
-          show_alert: true,
+        // Trigger withdrawbank command
+        bot.answerCallbackQuery(query.id);
+        bot.deleteMessage(chatId, messageId);
+        bot.processUpdate({
+          update_id: Date.now(),
+          message: {
+            message_id: Date.now(),
+            from: query.from,
+            chat: { id: chatId, type: "private" },
+            date: Math.floor(Date.now() / 1000),
+            text: "/withdrawbank",
+          },
         });
         break;
 
