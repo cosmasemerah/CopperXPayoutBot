@@ -232,6 +232,7 @@ export function registerAuthHandlers(bot: TelegramBot): void {
         `💰 /balance - View your wallet balances\n` +
         `🏦 /setdefaultwallet - Set your default wallet\n` +
         `📤 /sendemail - Send funds to an email address\n` +
+        `🔑 /sendwallet - Send funds to a wallet address\n` +
         `📜 /history - View your transaction history\n` +
         `📋 /menu - Show interactive menu with all options\n` +
         `🚫 /unsubscribe - Disable deposit notifications\n` +

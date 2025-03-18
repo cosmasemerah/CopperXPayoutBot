@@ -2,7 +2,7 @@ import { UserSession } from "./types";
 
 // Define session state interfaces
 export interface SessionState {
-  currentAction?: "login" | "sendemail" | "setdefaultwallet";
+  currentAction?: "login" | "sendemail" | "setdefaultwallet" | "sendwallet";
   callbackData?: string; // For storing inline keyboard callback data
   data?: Record<string, any>; // For storing step-specific data
 }
