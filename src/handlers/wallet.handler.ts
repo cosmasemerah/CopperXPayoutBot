@@ -1,10 +1,8 @@
 import TelegramBot from "node-telegram-bot-api";
-import { getSession } from "../session";
+import { getSession, updateSessionState, getSessionState } from "../session";
 import * as walletService from "../services/wallet.service";
 import { formatWalletBalances } from "../utils/format";
-
-// Store wallet ID input state
-const awaitingWalletId = new Map<number, boolean>();
+import { createWalletSelectionKeyboard } from "../utils/keyboard";
 
 // Network ID to name mapping
 const networkNames: Record<string, string> = {
@@ -111,26 +109,20 @@ export function registerWalletHandlers(bot: TelegramBot): void {
         return;
       }
 
-      // Display available wallets
-      let walletMessage =
-        "Please select a wallet ID to set as default by replying with the wallet ID:\n\n";
+      // Set the session state for default wallet selection
+      updateSessionState(chatId, {
+        currentAction: "setdefaultwallet",
+      });
 
-      for (const wallet of walletBalances) {
-        // Get network name
-        const networkName =
-          networkNames[wallet.network] || `Network ${wallet.network}`;
-
-        walletMessage += `Network: ${networkName} (${wallet.network})\n`;
-        walletMessage += `Current Default: ${
-          wallet.isDefault ? "Yes" : "No"
-        }\n`;
-        walletMessage += `Wallet ID: ${wallet.walletId}\n\n`;
-      }
-
-      bot.sendMessage(chatId, walletMessage);
-
-      // Set awaiting wallet ID state
-      awaitingWalletId.set(chatId, true);
+      // Display wallets as inline keyboard
+      bot.sendMessage(chatId, "Please select a wallet to set as default:", {
+        reply_markup: {
+          inline_keyboard: createWalletSelectionKeyboard(
+            walletBalances,
+            "wallet"
+          ),
+        },
+      });
     } catch (error) {
       console.error("Wallet fetch error:", error);
       bot.sendMessage(
@@ -140,43 +132,96 @@ export function registerWalletHandlers(bot: TelegramBot): void {
     }
   });
 
-  // Handle wallet ID input
-  bot.on("message", async (msg: TelegramBot.Message) => {
-    const chatId = msg.chat.id;
-    const text = msg.text;
+  // Handle callback queries for wallet selection
+  bot.on("callback_query", async (query) => {
+    if (!query.message || !query.data) return;
 
-    // Ignore commands
-    if (!text || text.startsWith("/")) return;
+    const chatId = query.message.chat.id;
+    const messageId = query.message.message_id;
+    const callbackData = query.data;
 
-    // Handle wallet ID input
-    if (awaitingWalletId.get(chatId)) {
-      awaitingWalletId.delete(chatId);
+    // Check if this is a wallet-related callback
+    if (!callbackData.startsWith("wallet:")) return;
 
-      const session = getSession(chatId);
-      if (!session) {
-        bot.sendMessage(
-          chatId,
-          "⚠️ Your session has expired. Please use /login to authenticate."
-        );
-        return;
-      }
+    // Check if user is logged in
+    const session = getSession(chatId);
+    if (!session) {
+      bot.answerCallbackQuery(query.id, {
+        text: "Your session has expired. Please login again.",
+        show_alert: true,
+      });
+      bot.deleteMessage(chatId, messageId);
+      return;
+    }
+
+    // Check if this is a setdefaultwallet action
+    const sessionState = getSessionState(chatId);
+    if (!sessionState || sessionState.currentAction !== "setdefaultwallet") {
+      bot.answerCallbackQuery(query.id, {
+        text: "This operation is no longer active.",
+        show_alert: true,
+      });
+      return;
+    }
+
+    const parts = callbackData.split(":");
+    const action = parts[1];
+
+    // Handle cancellation
+    if (action === "cancel") {
+      bot.answerCallbackQuery(query.id, { text: "Operation cancelled" });
+      updateSessionState(chatId, {});
+      bot.deleteMessage(chatId, messageId);
+      return;
+    }
+
+    // Handle wallet selection
+    if (action === "select") {
+      const walletId = parts[2];
 
       try {
         // Set default wallet
-        await walletService.setDefaultWallet(session.token, text);
+        await walletService.setDefaultWallet(session.token, walletId);
 
-        // Log the response for debugging
-        console.log("Default wallet set successfully for wallet ID:", text);
+        // Log success
+        console.log("Default wallet set successfully for wallet ID:", walletId);
 
-        bot.sendMessage(
-          chatId,
-          "✅ Default wallet set successfully! Use /balance to view your updated wallets."
+        // Acknowledge the callback
+        bot.answerCallbackQuery(query.id, {
+          text: "Default wallet updated successfully!",
+          show_alert: false,
+        });
+
+        // Clear the session state
+        updateSessionState(chatId, {});
+
+        // Update the message to show success
+        bot.editMessageText(
+          "✅ Default wallet set successfully! Use /balance to view your updated wallets.",
+          {
+            chat_id: chatId,
+            message_id: messageId,
+          }
         );
       } catch (error) {
         console.error("Set default wallet error:", error);
-        bot.sendMessage(
-          chatId,
-          "❌ Failed to set default wallet. Please verify the wallet ID and try again with /setdefaultwallet."
+
+        // Acknowledge the callback with error
+        bot.answerCallbackQuery(query.id, {
+          text: "Failed to set default wallet. Please try again.",
+          show_alert: true,
+        });
+
+        // Clear the session state
+        updateSessionState(chatId, {});
+
+        // Update the message to show error
+        bot.editMessageText(
+          "❌ Failed to set default wallet. Please try again with /setdefaultwallet.",
+          {
+            chat_id: chatId,
+            message_id: messageId,
+          }
         );
       }
     }

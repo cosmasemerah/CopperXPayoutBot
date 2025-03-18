@@ -232,6 +232,8 @@ export function registerAuthHandlers(bot: TelegramBot): void {
         `💰 /balance - View your wallet balances\n` +
         `🏦 /setdefaultwallet - Set your default wallet\n` +
         `📤 /sendemail - Send funds to an email address\n` +
+        `📜 /history - View your transaction history\n` +
+        `📋 /menu - Show interactive menu with all options\n` +
         `🚫 /unsubscribe - Disable deposit notifications\n` +
         `❓ /help - Show this help message\n\n` +
         `Need assistance? Visit https://t.me/copperxcommunity/2183`

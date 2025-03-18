@@ -1,7 +1,8 @@
 import TelegramBot from "node-telegram-bot-api";
-import { getSession } from "../session";
+import { getSession, updateSessionState, getSessionState } from "../session";
 import * as transferService from "../services/transfer.service";
 import { formatAmount } from "../utils/format";
+import { createYesNoKeyboard, createAmountKeyboard } from "../utils/keyboard";
 
 // Define the SendEmailState interface for the multi-step process
 interface SendEmailState {
@@ -9,9 +10,6 @@ interface SendEmailState {
   email?: string;
   amount?: string;
 }
-
-// Map to track email transfer states
-const sendEmailStates = new Map<number, SendEmailState>();
 
 /**
  * Register transfer handlers
@@ -40,7 +38,10 @@ export function registerTransferHandlers(bot: TelegramBot): void {
     );
 
     // Initialize state machine at email step
-    sendEmailStates.set(chatId, { step: "email" });
+    updateSessionState(chatId, {
+      currentAction: "sendemail",
+      data: { step: "email" },
+    });
   });
 
   // Transaction history command handler
@@ -116,14 +117,15 @@ export function registerTransferHandlers(bot: TelegramBot): void {
     // Ignore commands and empty messages
     if (!text || text.startsWith("/")) return;
 
-    // Handle send email flow with state machine
-    if (sendEmailStates.has(chatId)) {
-      const state = sendEmailStates.get(chatId)!;
+    // Get session state
+    const sessionState = getSessionState(chatId);
 
+    // Handle send email flow with session state
+    if (sessionState?.currentAction === "sendemail") {
       // Make sure user is still logged in
       const session = getSession(chatId);
       if (!session) {
-        sendEmailStates.delete(chatId);
+        updateSessionState(chatId, {});
         bot.sendMessage(
           chatId,
           "⚠️ Your session has expired. Please use /login to authenticate."
@@ -131,8 +133,10 @@ export function registerTransferHandlers(bot: TelegramBot): void {
         return;
       }
 
+      const data = sessionState.data as SendEmailState;
+
       // Handle each step in the state machine
-      if (state.step === "email") {
+      if (data.step === "email") {
         // Basic email validation
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(text)) {
@@ -143,13 +147,25 @@ export function registerTransferHandlers(bot: TelegramBot): void {
           return;
         }
 
-        // Move to amount step
-        sendEmailStates.set(chatId, { step: "amount", email: text });
+        // Update state with email and move to amount step
+        updateSessionState(chatId, {
+          currentAction: "sendemail",
+          data: { step: "amount", email: text },
+        });
+
+        // Show amount options with inline keyboard
         bot.sendMessage(
           chatId,
-          `📝 Recipient: ${text}\n\nPlease enter the amount in USDC to send:`
+          `📝 Recipient: ${text}\n\nPlease select or enter an amount in USDC to send:`,
+          {
+            reply_markup: {
+              inline_keyboard: createAmountKeyboard("sendemail"),
+            },
+          }
         );
-      } else if (state.step === "amount") {
+      } else if (data.step === "amount" && data.email) {
+        // This handles custom amount input (when user types amount instead of using buttons)
+
         // Validate amount is a positive number
         const amount = parseFloat(text);
         if (isNaN(amount) || amount <= 0) {
@@ -161,65 +177,176 @@ export function registerTransferHandlers(bot: TelegramBot): void {
         }
 
         // Move to confirmation step
-        sendEmailStates.set(chatId, {
-          step: "confirm",
-          email: state.email,
-          amount: text,
+        updateSessionState(chatId, {
+          currentAction: "sendemail",
+          data: {
+            step: "confirm",
+            email: data.email,
+            amount: text,
+          },
         });
 
-        // Ask for confirmation
+        // Ask for confirmation with inline keyboard
         bot.sendMessage(
           chatId,
           `⚠️ *Please Confirm Transfer*\n\n` +
-            `Recipient: ${state.email}\n` +
+            `Recipient: ${data.email}\n` +
             `Amount: ${text} USDC\n\n` +
-            `Reply with "yes" to confirm or "no" to cancel.`,
-          { parse_mode: "Markdown" }
-        );
-      } else if (state.step === "confirm") {
-        // Process confirmation
-        const response = text.toLowerCase();
-
-        // Clear state regardless of response
-        sendEmailStates.delete(chatId);
-
-        if (response === "yes" || response === "confirm") {
-          try {
-            // Make API call to send funds
-            await transferService.sendToEmail(
-              session.token,
-              state.email!,
-              state.amount!
-            );
-
-            // Success message
-            bot.sendMessage(
-              chatId,
-              `✅ *Transfer Initiated Successfully!*\n\n` +
-                `${state.amount} USDC has been sent to ${state.email}.\n\n` +
-                `Use /balance to check your updated wallet balance.`,
-              { parse_mode: "Markdown" }
-            );
-          } catch (error) {
-            console.error("Email transfer error:", error);
-
-            // Provide user-friendly error message
-            bot.sendMessage(
-              chatId,
-              "❌ *Transfer Failed*\n\n" +
-                "The transfer could not be completed. Please check your balance " +
-                "and ensure the recipient information is correct.\n\n" +
-                "Use /balance to check your available funds.",
-              { parse_mode: "Markdown" }
-            );
+            `Do you want to proceed with this transfer?`,
+          {
+            parse_mode: "Markdown",
+            reply_markup: {
+              inline_keyboard: createYesNoKeyboard("sendemail"),
+            },
           }
-        } else {
-          // Cancellation message
-          bot.sendMessage(
-            chatId,
-            "🚫 Transfer cancelled. No funds have been sent."
+        );
+      }
+    }
+  });
+
+  // Handle callback queries from inline keyboards
+  bot.on("callback_query", async (query) => {
+    if (!query.message || !query.data) return;
+
+    const chatId = query.message.chat.id;
+    const messageId = query.message.message_id;
+    const callbackData = query.data;
+
+    // For debugging
+    console.log(`Received callback: ${callbackData} from chat ${chatId}`);
+
+    // Check if user is logged in
+    const session = getSession(chatId);
+    if (!session) {
+      bot.answerCallbackQuery(query.id, {
+        text: "Your session has expired. Please login again.",
+        show_alert: true,
+      });
+      bot.deleteMessage(chatId, messageId);
+      return;
+    }
+
+    // Handle send email flow callbacks
+    if (callbackData.startsWith("sendemail:")) {
+      const parts = callbackData.split(":");
+      const action = parts[1];
+      const sessionState = getSessionState(chatId);
+
+      if (!sessionState || sessionState.currentAction !== "sendemail") {
+        bot.answerCallbackQuery(query.id, {
+          text: "This operation is no longer active.",
+          show_alert: true,
+        });
+        return;
+      }
+
+      const data = sessionState.data as SendEmailState;
+
+      // Handle amount selection
+      if (action === "amount") {
+        const amount = parts[2];
+
+        if (amount === "custom") {
+          // Ask for custom amount
+          bot.answerCallbackQuery(query.id);
+          bot.editMessageText(
+            `📝 Recipient: ${data.email}\n\nPlease enter a custom amount in USDC:`,
+            {
+              chat_id: chatId,
+              message_id: messageId,
+            }
+          );
+          return;
+        }
+
+        // Move to confirmation step with selected amount
+        updateSessionState(chatId, {
+          currentAction: "sendemail",
+          data: {
+            step: "confirm",
+            email: data.email,
+            amount: amount,
+          },
+        });
+
+        // Ask for confirmation
+        bot.answerCallbackQuery(query.id);
+        bot.editMessageText(
+          `⚠️ *Please Confirm Transfer*\n\n` +
+            `Recipient: ${data.email}\n` +
+            `Amount: ${amount} USDC\n\n` +
+            `Do you want to proceed with this transfer?`,
+          {
+            chat_id: chatId,
+            message_id: messageId,
+            parse_mode: "Markdown",
+            reply_markup: {
+              inline_keyboard: createYesNoKeyboard("sendemail"),
+            },
+          }
+        );
+      }
+      // Handle confirmation response
+      else if (action === "yes" || action === "no") {
+        bot.answerCallbackQuery(query.id);
+
+        if (action === "no") {
+          // Clear state and show cancellation message
+          updateSessionState(chatId, {});
+          bot.editMessageText(
+            "🚫 Transfer cancelled. No funds have been sent.",
+            {
+              chat_id: chatId,
+              message_id: messageId,
+            }
+          );
+          return;
+        }
+
+        // Process the transfer
+        try {
+          // Make API call to send funds
+          await transferService.sendToEmail(
+            session.token,
+            data.email!,
+            data.amount!
+          );
+
+          // Clear state and show success message
+          updateSessionState(chatId, {});
+          bot.editMessageText(
+            `✅ *Transfer Initiated Successfully!*\n\n` +
+              `${data.amount} USDC has been sent to ${data.email}.\n\n` +
+              `Use /balance to check your updated wallet balance.`,
+            {
+              chat_id: chatId,
+              message_id: messageId,
+              parse_mode: "Markdown",
+            }
+          );
+        } catch (error) {
+          console.error("Email transfer error:", error);
+
+          // Clear state and show error message
+          updateSessionState(chatId, {});
+          bot.editMessageText(
+            "❌ *Transfer Failed*\n\n" +
+              "The transfer could not be completed. Please check your balance " +
+              "and ensure the recipient information is correct.\n\n" +
+              "Use /balance to check your available funds.",
+            {
+              chat_id: chatId,
+              message_id: messageId,
+              parse_mode: "Markdown",
+            }
           );
         }
+      }
+      // Handle cancellation
+      else if (action === "cancel") {
+        bot.answerCallbackQuery(query.id, { text: "Operation cancelled" });
+        updateSessionState(chatId, {});
+        bot.deleteMessage(chatId, messageId);
       }
     }
   });
