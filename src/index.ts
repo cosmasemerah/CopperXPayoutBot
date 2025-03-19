@@ -9,6 +9,7 @@ import {
   createMainMenuKeyboard,
   createSendOptionsKeyboard,
 } from "./utils/keyboard";
+import http from "http";
 
 // Initialize bot with polling
 const bot = new TelegramBot(config.botToken, { polling: true });
@@ -324,4 +325,16 @@ console.log("Copperx Payout Bot is running...");
 // Get and log bot information
 bot.getMe().then((botInfo) => {
   console.log(`Bot username: @${botInfo.username}`);
+});
+
+// Add a simple HTTP server to satisfy Render's port binding requirement
+const PORT = process.env.PORT || 3000;
+const server = http.createServer((_req, res) => {
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "text/plain");
+  res.end("CopperX Telegram Bot is running!\n");
+});
+
+server.listen(PORT, () => {
+  console.log(`HTTP server running on port ${PORT} for health checks`);
 });
