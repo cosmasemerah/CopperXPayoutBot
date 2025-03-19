@@ -2,7 +2,11 @@ import TelegramBot from "node-telegram-bot-api";
 import { getSession, updateSessionState, getSessionState } from "../session";
 import * as walletService from "../services/wallet.service";
 import { formatWalletBalances } from "../utils/format";
-import { createWalletSelectionKeyboard } from "../utils/keyboard";
+import {
+  createWalletSelectionKeyboard,
+  createMainMenuKeyboard,
+} from "../utils/keyboard";
+import { config } from "../config";
 
 // Network ID to name mapping
 const networkNames: Record<string, string> = {
@@ -66,11 +70,14 @@ export function registerWalletHandlers(bot: TelegramBot): void {
         "\nUse /setdefaultwallet to change your default wallet.";
 
       bot.sendMessage(chatId, messageWithHint, { parse_mode: "Markdown" });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Wallet balances fetch error:", error);
       bot.sendMessage(
         chatId,
-        "❌ Failed to fetch your wallet balances. Please try again later."
+        `❌ Balance check failed: ${
+          error.response?.data?.message ||
+          "Could not retrieve your wallet balances"
+        }. Try again or visit ${config.supportLink}`
       );
     }
   });
@@ -123,11 +130,13 @@ export function registerWalletHandlers(bot: TelegramBot): void {
           ),
         },
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Wallet fetch error:", error);
       bot.sendMessage(
         chatId,
-        "❌ Failed to fetch your wallets. Please try again later."
+        `❌ Wallet operation failed: ${
+          error.response?.data?.message || "Could not retrieve your wallets"
+        }. Try again or visit ${config.supportLink}`
       );
     }
   });
@@ -201,9 +210,15 @@ export function registerWalletHandlers(bot: TelegramBot): void {
           {
             chat_id: chatId,
             message_id: messageId,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "🔍 View Balance", callback_data: "menu:balance" }],
+                [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+              ],
+            },
           }
         );
-      } catch (error) {
+      } catch (error: any) {
         console.error("Set default wallet error:", error);
 
         // Acknowledge the callback with error
@@ -217,10 +232,23 @@ export function registerWalletHandlers(bot: TelegramBot): void {
 
         // Update the message to show error
         bot.editMessageText(
-          "❌ Failed to set default wallet. Please try again with /setdefaultwallet.",
+          `❌ Default wallet update failed: ${
+            error.response?.data?.message || "Could not set default wallet"
+          }. Try again or visit ${config.supportLink}`,
           {
             chat_id: chatId,
             message_id: messageId,
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "🔄 Try Again",
+                    callback_data: "menu:setdefaultwallet",
+                  },
+                ],
+                [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+              ],
+            },
           }
         );
       }

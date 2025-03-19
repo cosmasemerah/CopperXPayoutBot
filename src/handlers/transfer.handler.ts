@@ -2,8 +2,13 @@ import TelegramBot from "node-telegram-bot-api";
 import { getSession, updateSessionState, getSessionState } from "../session";
 import * as transferService from "../services/transfer.service";
 import * as walletService from "../services/wallet.service";
-import { formatAmount, formatAddress } from "../utils/format";
-import { createYesNoKeyboard, createAmountKeyboard } from "../utils/keyboard";
+import { formatAmount } from "../utils/format";
+import {
+  createYesNoKeyboard,
+  createAmountKeyboard,
+  createMainMenuKeyboard,
+} from "../utils/keyboard";
+import { config } from "../config";
 
 // Define the SendEmailState interface for the multi-step process
 interface SendEmailState {
@@ -581,17 +586,15 @@ export function registerTransferHandlers(bot: TelegramBot): void {
               { parse_mode: "Markdown" }
             );
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error("Deposit initiation error:", error);
-          updateSessionState(chatId, {}); // Clear session state
-          bot.sendMessage(
+          await bot.sendMessage(
             chatId,
-            "❌ *Deposit Setup Failed*\n\n" +
-              "We couldn't initiate your deposit at this time. Please try again later " +
-              "or visit the Copperx web app to complete your deposit.\n\n" +
-              "https://copperx.io",
-            { parse_mode: "Markdown" }
+            `❌ Deposit failed: ${
+              error.response?.data?.message || "Unexpected error occurred"
+            }. Try again or visit ${config.supportLink}`
           );
+          updateSessionState(chatId, {}); // Clear session state
         }
       }
     }
@@ -743,6 +746,11 @@ export function registerTransferHandlers(bot: TelegramBot): void {
             {
               chat_id: chatId,
               message_id: messageId,
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+                ],
+              },
             }
           );
           return;
@@ -767,23 +775,21 @@ export function registerTransferHandlers(bot: TelegramBot): void {
               chat_id: chatId,
               message_id: messageId,
               parse_mode: "Markdown",
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "🔍 View Balance", callback_data: "menu:balance" }],
+                  [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+                ],
+              },
             }
           );
-        } catch (error) {
-          console.error("Email transfer error:", error);
-
-          // Clear state and show error message
-          updateSessionState(chatId, {});
-          bot.editMessageText(
-            "❌ *Transfer Failed*\n\n" +
-              "The transfer could not be completed. Please check your balance " +
-              "and ensure the recipient information is correct.\n\n" +
-              "Use /balance to check your available funds.",
-            {
-              chat_id: chatId,
-              message_id: messageId,
-              parse_mode: "Markdown",
-            }
+        } catch (error: any) {
+          console.error("Send to email error:", error);
+          await bot.sendMessage(
+            chatId,
+            `❌ Transfer failed: ${
+              error.response?.data?.message || "Unexpected error occurred"
+            }. Try again or visit ${config.supportLink}`
           );
         }
       }
@@ -882,6 +888,11 @@ export function registerTransferHandlers(bot: TelegramBot): void {
             {
               chat_id: chatId,
               message_id: messageId,
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+                ],
+              },
             }
           );
           return;
@@ -908,23 +919,21 @@ export function registerTransferHandlers(bot: TelegramBot): void {
               chat_id: chatId,
               message_id: messageId,
               parse_mode: "Markdown",
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "🔍 View Balance", callback_data: "menu:balance" }],
+                  [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+                ],
+              },
             }
           );
-        } catch (error) {
-          console.error("Wallet transfer error:", error);
-
-          // Clear state and show error message
-          updateSessionState(chatId, {});
-          bot.editMessageText(
-            "❌ *Transfer Failed*\n\n" +
-              "The transfer could not be completed. Please check your balance " +
-              "and ensure the recipient address and network are correct.\n\n" +
-              "Use /balance to check your available funds.",
-            {
-              chat_id: chatId,
-              message_id: messageId,
-              parse_mode: "Markdown",
-            }
+        } catch (error: any) {
+          console.error("Send to wallet error:", error);
+          await bot.sendMessage(
+            chatId,
+            `❌ Transfer failed: ${
+              error.response?.data?.message || "Unexpected error occurred"
+            }. Try again or visit ${config.supportLink}`
           );
         }
       }
@@ -1055,21 +1064,15 @@ export function registerTransferHandlers(bot: TelegramBot): void {
               }
             );
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error("Deposit initiation error:", error);
-          updateSessionState(chatId, {}); // Clear session state
-          bot.answerCallbackQuery(query.id);
-          bot.editMessageText(
-            "❌ *Deposit Setup Failed*\n\n" +
-              "We couldn't initiate your deposit at this time. Please try again later " +
-              "or visit the Copperx web app to complete your deposit.\n\n" +
-              "https://copperx.io",
-            {
-              chat_id: chatId,
-              message_id: messageId,
-              parse_mode: "Markdown",
-            }
+          await bot.sendMessage(
+            chatId,
+            `❌ Deposit failed: ${
+              error.response?.data?.message || "Unexpected error occurred"
+            }. Try again or visit ${config.supportLink}`
           );
+          updateSessionState(chatId, {}); // Clear session state
         }
       }
       // Handle cancellation
@@ -1151,6 +1154,11 @@ export function registerTransferHandlers(bot: TelegramBot): void {
             {
               chat_id: chatId,
               message_id: messageId,
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+                ],
+              },
             }
           );
           return;
@@ -1172,39 +1180,36 @@ export function registerTransferHandlers(bot: TelegramBot): void {
               chat_id: chatId,
               message_id: messageId,
               parse_mode: "Markdown",
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "📜 View History", callback_data: "menu:history" }],
+                  [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+                ],
+              },
             }
           );
-        } catch (error) {
+        } catch (error: any) {
           console.error("Bank withdrawal error:", error);
 
-          // Extract error message if available
-          const errorResponse = (error as any)?.response?.data;
-          let errorMessage = "The withdrawal could not be completed.";
+          // Get error message based on the type of error
+          let withdrawalErrorMessage = "Unexpected error occurred";
 
-          // Check for specific error types
-          if (errorResponse?.message?.includes("KYC")) {
-            errorMessage =
-              "You need to complete KYC verification before withdrawing funds. Please visit https://copperx.io/kyc to complete your verification.";
-          } else if (errorResponse?.message?.includes("minimum")) {
-            errorMessage =
-              "The withdrawal amount is below the minimum requirement. Please try a larger amount.";
-          } else if (errorResponse?.message?.includes("bank")) {
-            errorMessage =
-              "You need to set up your bank account details first. Please visit https://copperx.io to configure your bank account.";
+          if (error.response?.data?.message?.includes("KYC")) {
+            withdrawalErrorMessage =
+              "Your KYC verification is incomplete or pending approval";
+          } else if (error.response?.data?.message?.includes("minimum")) {
+            withdrawalErrorMessage =
+              "The amount is below the minimum withdrawal limit";
+          } else if (error.response?.data?.message?.includes("bank")) {
+            withdrawalErrorMessage =
+              "No bank account configured. Please set up your bank details on Copperx platform";
+          } else if (error.response?.data?.message) {
+            withdrawalErrorMessage = error.response.data.message;
           }
 
-          // Clear state and show error message
-          updateSessionState(chatId, {});
-          bot.editMessageText(
-            "❌ *Withdrawal Failed*\n\n" +
-              errorMessage +
-              "\n\n" +
-              "Use /balance to check your available funds.",
-            {
-              chat_id: chatId,
-              message_id: messageId,
-              parse_mode: "Markdown",
-            }
+          await bot.sendMessage(
+            chatId,
+            `❌ Bank withdrawal failed: ${withdrawalErrorMessage}. Try again or visit ${config.supportLink}`
           );
         }
       }
@@ -1214,6 +1219,11 @@ export function registerTransferHandlers(bot: TelegramBot): void {
         updateSessionState(chatId, {});
         bot.deleteMessage(chatId, messageId);
       }
+    }
+    // Handle return to menu callbacks
+    else if (callbackData === "return:menu") {
+      // This is now handled in the main index.ts file
+      return;
     }
   });
 }

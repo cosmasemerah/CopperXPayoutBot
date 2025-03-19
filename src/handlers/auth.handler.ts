@@ -4,6 +4,8 @@ import * as authService from "../services/auth.service";
 import * as notificationService from "../services/notification.service";
 import { ExtendedSession } from "../session";
 import { KYCStatus } from "../types";
+import { config } from "../config";
+import { createMainMenuKeyboard } from "../utils/keyboard";
 
 // Map to track active notification subscriptions for deposit events
 const activeSubscriptions = new Map<number, any>();
@@ -29,14 +31,31 @@ export function registerAuthHandlers(bot: TelegramBot): void {
     const chatId = msg.chat.id;
     const username = msg.from?.username || msg.from?.first_name || "there";
 
-    bot.sendMessage(
-      chatId,
-      `Welcome ${username} to the Copperx Payout Bot! 🚀\n\n` +
-        `I can help you manage your Copperx payouts directly through Telegram.\n\n` +
-        `🔑 Use /login to authenticate\n` +
-        `❓ Use /help to see all available commands\n\n` +
-        `Need support? Visit https://t.me/copperxcommunity/2183`
-    );
+    // Check if user is already logged in
+    const session = getSession(chatId);
+    if (session) {
+      // User is logged in, show welcome with menu
+      bot.sendMessage(
+        chatId,
+        `Welcome back ${username} to the Copperx Payout Bot! 🚀\n\n` +
+          `What would you like to do today?`,
+        {
+          reply_markup: {
+            inline_keyboard: createMainMenuKeyboard(),
+          },
+        }
+      );
+    } else {
+      // New user, show welcome message
+      bot.sendMessage(
+        chatId,
+        `Welcome ${username} to the Copperx Payout Bot! 🚀\n\n` +
+          `I can help you manage your Copperx payouts directly through Telegram.\n\n` +
+          `🔑 Use /login to authenticate\n` +
+          `❓ Use /help to see all available commands\n\n` +
+          `Need support? Visit ${config.supportLink}`
+      );
+    }
   });
 
   // Login command handler
@@ -115,11 +134,13 @@ export function registerAuthHandlers(bot: TelegramBot): void {
         `*Role*: ${user.role}`;
 
       bot.sendMessage(chatId, profileMessage, { parse_mode: "Markdown" });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Profile fetch error:", error);
       bot.sendMessage(
         chatId,
-        "❌ Failed to fetch your profile information. Please try again later."
+        `❌ Profile fetch failed: ${
+          error.response?.data?.message || "Could not retrieve your profile"
+        }. Try again or visit ${config.supportLink}`
       );
     }
   });
@@ -176,11 +197,13 @@ export function registerAuthHandlers(bot: TelegramBot): void {
       bot.sendMessage(chatId, `📋 *KYC Status*\n\n${statusMessage}`, {
         parse_mode: "Markdown",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("KYC status fetch error:", error);
       bot.sendMessage(
         chatId,
-        "❌ Failed to fetch your KYC status. Please try again later."
+        `❌ KYC check failed: ${
+          error.response?.data?.message || "Could not retrieve your KYC status"
+        }. Try again or visit ${config.supportLink}`
       );
     }
   });
@@ -225,21 +248,24 @@ export function registerAuthHandlers(bot: TelegramBot): void {
 
     bot.sendMessage(
       chatId,
-      `Available Commands:\n\n` +
-        `🔑 /login - Authenticate with your Copperx account\n` +
-        `👤 /profile - View your profile details\n` +
-        `📋 /kyc - Check your KYC status\n` +
-        `💰 /balance - View your wallet balances\n` +
-        `🏦 /setdefaultwallet - Set your default wallet\n` +
-        `📤 /sendemail - Send funds to an email address\n` +
-        `🔑 /sendwallet - Send funds to a wallet address\n` +
-        `💵 /deposit - Get deposit instructions for your wallet\n` +
-        `🏧 /withdrawbank - Withdraw funds to your bank account\n` +
-        `📜 /history - View your transaction history\n` +
-        `📋 /menu - Show interactive menu with all options\n` +
-        `🚫 /unsubscribe - Disable deposit notifications\n` +
-        `❓ /help - Show this help message\n\n` +
-        `Need assistance? Visit https://t.me/copperxcommunity/2183`
+      "📚 *Command Reference*\n\n" +
+        "🔑 /login - Sign in with Copperx\n" +
+        "👋 /logout - Sign out\n" +
+        "👤 /profile - View your account details\n" +
+        "📋 /kyc - Check KYC status\n" +
+        "💰 /balance - See wallet balances\n" +
+        "🏦 /setdefaultwallet - Set default wallet\n" +
+        "📥 /deposit - Deposit USDC\n" +
+        "📧 /sendemail - Send to email\n" +
+        "📤 /sendwallet - Send to wallet\n" +
+        "🏧 /withdrawbank - Withdraw to bank\n" +
+        "📜 /history - View recent transactions\n" +
+        "📋 /menu - Interactive command menu\n" +
+        "🚫 /unsubscribe - Stop notifications\n" +
+        "❓ /help - Show this guide\n\n" +
+        `*Tip*: Use /menu anytime to access the interactive dashboard menu!\n\n` +
+        `Support: ${config.supportLink}`,
+      { parse_mode: "Markdown" }
     );
   });
 
@@ -274,11 +300,13 @@ export function registerAuthHandlers(bot: TelegramBot): void {
           chatId,
           "OTP has been sent to your email. Please enter it here:"
         );
-      } catch (error) {
+      } catch (error: any) {
         console.error("OTP request error:", error);
         bot.sendMessage(
           chatId,
-          "Failed to send OTP. Please try again with /login"
+          `❌ Login failed: ${
+            error.response?.data?.message || "Could not send OTP"
+          }. Try again or visit ${config.supportLink}`
         );
       }
       return;
@@ -331,13 +359,21 @@ export function registerAuthHandlers(bot: TelegramBot): void {
 
         bot.sendMessage(
           chatId,
-          `✅ Login successful!\n\nWelcome ${authResponse.user.firstName}!\n\nYou will automatically receive notifications for deposits. Use /help to see available commands.`
+          `✅ Login successful!\n\nWelcome ${authResponse.user.firstName}!\n\nYou will automatically receive notifications for deposits. Use /help to see available commands.`,
+          {
+            reply_markup: {
+              inline_keyboard: createMainMenuKeyboard(),
+            },
+          }
         );
-      } catch (error) {
+      } catch (error: any) {
         console.error("Authentication error:", error);
         bot.sendMessage(
           chatId,
-          "❌ Invalid OTP or authentication failed. Please try again with /login"
+          `❌ Login failed: ${
+            error.response?.data?.message ||
+            "Invalid OTP or authentication failed"
+          }. Try again or visit ${config.supportLink}`
         );
       }
       return;

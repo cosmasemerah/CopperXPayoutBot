@@ -105,9 +105,17 @@ export function createMainMenuKeyboard(): TelegramBot.InlineKeyboardButton[][] {
     ],
     [
       { text: "💵 Deposit", callback_data: "menu:deposit" },
-      { text: "📋 History", callback_data: "menu:history" },
+      { text: "🏧 Withdraw", callback_data: "menu:withdraw" },
     ],
-    [{ text: "👤 Profile", callback_data: "menu:profile" }],
+    [
+      { text: "📋 History", callback_data: "menu:history" },
+      { text: "👤 Profile", callback_data: "menu:profile" },
+    ],
+    [
+      { text: "🔑 Set Default Wallet", callback_data: "menu:setdefaultwallet" },
+      { text: "📋 KYC Status", callback_data: "menu:kyc" },
+    ],
+    [{ text: "❓ Help", callback_data: "menu:help" }],
   ];
 }
 

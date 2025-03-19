@@ -104,6 +104,70 @@ bot.on("callback_query", (query) => {
         });
         break;
 
+      case "withdraw":
+        // Trigger withdrawbank command
+        bot.answerCallbackQuery(query.id);
+        bot.deleteMessage(chatId, messageId);
+        bot.processUpdate({
+          update_id: Date.now(),
+          message: {
+            message_id: Date.now(),
+            from: query.from,
+            chat: { id: chatId, type: "private" },
+            date: Math.floor(Date.now() / 1000),
+            text: "/withdrawbank",
+          },
+        });
+        break;
+
+      case "setdefaultwallet":
+        // Trigger setdefaultwallet command
+        bot.answerCallbackQuery(query.id);
+        bot.deleteMessage(chatId, messageId);
+        bot.processUpdate({
+          update_id: Date.now(),
+          message: {
+            message_id: Date.now(),
+            from: query.from,
+            chat: { id: chatId, type: "private" },
+            date: Math.floor(Date.now() / 1000),
+            text: "/setdefaultwallet",
+          },
+        });
+        break;
+
+      case "kyc":
+        // Trigger kyc command
+        bot.answerCallbackQuery(query.id);
+        bot.deleteMessage(chatId, messageId);
+        bot.processUpdate({
+          update_id: Date.now(),
+          message: {
+            message_id: Date.now(),
+            from: query.from,
+            chat: { id: chatId, type: "private" },
+            date: Math.floor(Date.now() / 1000),
+            text: "/kyc",
+          },
+        });
+        break;
+
+      case "help":
+        // Trigger help command
+        bot.answerCallbackQuery(query.id);
+        bot.deleteMessage(chatId, messageId);
+        bot.processUpdate({
+          update_id: Date.now(),
+          message: {
+            message_id: Date.now(),
+            from: query.from,
+            chat: { id: chatId, type: "private" },
+            date: Math.floor(Date.now() / 1000),
+            text: "/help",
+          },
+        });
+        break;
+
       case "deposit":
         // Trigger deposit command
         bot.answerCallbackQuery(query.id);
@@ -199,6 +263,22 @@ bot.on("callback_query", (query) => {
         );
         break;
     }
+  }
+  // Handle direct return to menu callbacks
+  else if (callbackData === "return:menu") {
+    // Show main menu
+    bot.answerCallbackQuery(query.id);
+    bot.editMessageText(
+      "🤖 *CopperX Payout Bot*\n\nWhat would you like to do?",
+      {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: createMainMenuKeyboard(),
+        },
+      }
+    );
   }
 });
 
