@@ -3,11 +3,7 @@ import { getSession, updateSessionState, getSessionState } from "../session";
 import * as transferService from "../services/transfer.service";
 import * as walletService from "../services/wallet.service";
 import { formatAmount } from "../utils/format";
-import {
-  createYesNoKeyboard,
-  createAmountKeyboard,
-  createMainMenuKeyboard,
-} from "../utils/keyboard";
+import { createYesNoKeyboard, createAmountKeyboard } from "../utils/keyboard";
 import { config } from "../config";
 
 // Define the SendEmailState interface for the multi-step process

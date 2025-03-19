@@ -2,10 +2,7 @@ import TelegramBot from "node-telegram-bot-api";
 import { getSession, updateSessionState, getSessionState } from "../session";
 import * as walletService from "../services/wallet.service";
 import { formatWalletBalances } from "../utils/format";
-import {
-  createWalletSelectionKeyboard,
-  createMainMenuKeyboard,
-} from "../utils/keyboard";
+import { createWalletSelectionKeyboard } from "../utils/keyboard";
 import { config } from "../config";
 
 // Network ID to name mapping
