@@ -2,6 +2,24 @@ import TelegramBot from "node-telegram-bot-api";
 import { WalletBalance } from "../types";
 
 /**
+ * Generate a standardized callback data string
+ * @param module The module/feature (e.g., "menu", "wallet", "transfer")
+ * @param action The action to perform (e.g., "select", "confirm", "cancel")
+ * @param params Optional additional parameters
+ * @returns A standardized callback data string
+ */
+export function createCallbackData(
+  module: string,
+  action: string,
+  ...params: string[]
+): string {
+  if (params.length === 0) {
+    return `${module}:${action}`;
+  }
+  return `${module}:${action}:${params.join(":")}`;
+}
+
+/**
  * Create a simple Yes/No inline keyboard
  * @param callbackPrefix The prefix for callback data (e.g., "sendemail")
  * @returns An inline keyboard markup with Yes and No buttons
@@ -100,22 +118,43 @@ export function createAmountKeyboard(
 export function createMainMenuKeyboard(): TelegramBot.InlineKeyboardButton[][] {
   return [
     [
-      { text: "💰 Balance", callback_data: "menu:balance" },
-      { text: "📤 Send", callback_data: "menu:send" },
+      {
+        text: "💰 Balance",
+        callback_data: createCallbackData("menu", "balance"),
+      },
+      { text: "📤 Send", callback_data: createCallbackData("menu", "send") },
     ],
     [
-      { text: "💵 Deposit", callback_data: "menu:deposit" },
-      { text: "🏧 Withdraw", callback_data: "menu:withdraw" },
+      {
+        text: "💵 Deposit",
+        callback_data: createCallbackData("menu", "deposit"),
+      },
+      {
+        text: "🏧 Withdraw",
+        callback_data: createCallbackData("menu", "withdraw"),
+      },
     ],
     [
-      { text: "📋 History", callback_data: "menu:history" },
-      { text: "👤 Profile", callback_data: "menu:profile" },
+      {
+        text: "📋 History",
+        callback_data: createCallbackData("menu", "history"),
+      },
+      {
+        text: "👤 Profile",
+        callback_data: createCallbackData("menu", "profile"),
+      },
     ],
     [
-      { text: "🔑 Set Default Wallet", callback_data: "menu:setdefaultwallet" },
-      { text: "📋 KYC Status", callback_data: "menu:kyc" },
+      {
+        text: "🔑 Set Default Wallet",
+        callback_data: createCallbackData("menu", "setdefaultwallet"),
+      },
+      {
+        text: "📋 KYC Status",
+        callback_data: createCallbackData("menu", "kyc"),
+      },
     ],
-    [{ text: "❓ Help", callback_data: "menu:help" }],
+    [{ text: "❓ Help", callback_data: createCallbackData("menu", "help") }],
   ];
 }
 
@@ -132,6 +171,132 @@ export function createSendOptionsKeyboard(): TelegramBot.InlineKeyboardButton[][
     [
       { text: "🏦 Withdraw to Bank", callback_data: "send:bank" },
       { text: "↩️ Back to Menu", callback_data: "send:back" },
+    ],
+  ];
+}
+
+/**
+ * Create a keyboard with a single "Back to Menu" button
+ * @returns An inline keyboard with a back to menu button
+ */
+export function createBackToMenuKeyboard(): TelegramBot.InlineKeyboardButton[][] {
+  return [
+    [
+      {
+        text: "📋 Back to Menu",
+        callback_data: createCallbackData("return", "menu"),
+      },
+    ],
+  ];
+}
+
+/**
+ * Create a keyboard with common action buttons after displaying information
+ * @param actions Array of actions to include (e.g., ["balance", "retry"])
+ * @returns An inline keyboard with specified action buttons and back to menu
+ */
+export function createActionKeyboard(
+  actions: string[]
+): TelegramBot.InlineKeyboardButton[][] {
+  const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
+  const actionButtons: TelegramBot.InlineKeyboardButton[] = [];
+
+  // Create action buttons based on requested actions
+  actions.forEach((action) => {
+    switch (action) {
+      case "balance":
+        actionButtons.push({
+          text: "🔍 View Balance",
+          callback_data: createCallbackData("menu", "balance"),
+        });
+        break;
+      case "history":
+        actionButtons.push({
+          text: "📜 View History",
+          callback_data: createCallbackData("menu", "history"),
+        });
+        break;
+      case "retry":
+        // The retry callback should be handled by the specific handler
+        actionButtons.push({
+          text: "🔄 Try Again",
+          callback_data: createCallbackData("action", "retry"),
+        });
+        break;
+      case "deposit":
+        actionButtons.push({
+          text: "📥 Deposit",
+          callback_data: createCallbackData("menu", "deposit"),
+        });
+        break;
+      case "send":
+        actionButtons.push({
+          text: "📤 Send",
+          callback_data: createCallbackData("menu", "send"),
+        });
+        break;
+      case "profile":
+        actionButtons.push({
+          text: "👤 Profile",
+          callback_data: createCallbackData("menu", "profile"),
+        });
+        break;
+      case "kyc":
+        actionButtons.push({
+          text: "📋 KYC Status",
+          callback_data: createCallbackData("menu", "kyc"),
+        });
+        break;
+      case "setdefaultwallet":
+        actionButtons.push({
+          text: "🔑 Set Default Wallet",
+          callback_data: createCallbackData("menu", "setdefaultwallet"),
+        });
+        break;
+      case "support":
+        actionButtons.push({
+          text: "📞 Support",
+          callback_data: createCallbackData("action", "support"),
+        });
+        break;
+    }
+  });
+
+  // Add action buttons (up to 2 per row)
+  if (actionButtons.length > 0) {
+    // Split buttons into rows of 2
+    for (let i = 0; i < actionButtons.length; i += 2) {
+      const row = actionButtons.slice(i, i + 2);
+      keyboard.push(row);
+    }
+  }
+
+  // Always add back to menu button
+  keyboard.push([
+    {
+      text: "📋 Back to Menu",
+      callback_data: createCallbackData("return", "menu"),
+    },
+  ]);
+
+  return keyboard;
+}
+
+/**
+ * Create a keyboard for error messages
+ * @param retryCallback The callback data for retry action
+ * @returns An inline keyboard with retry and back to menu buttons
+ */
+export function createErrorActionKeyboard(
+  retryCallback: string
+): TelegramBot.InlineKeyboardButton[][] {
+  return [
+    [
+      { text: "🔄 Try Again", callback_data: retryCallback },
+      {
+        text: "📋 Back to Menu",
+        callback_data: createCallbackData("return", "menu"),
+      },
     ],
   ];
 }

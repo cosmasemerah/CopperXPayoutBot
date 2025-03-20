@@ -4,15 +4,23 @@ import { registerAuthHandlers } from "./handlers/auth.handler";
 import { registerWalletHandlers } from "./handlers/wallet.handler";
 import { registerTransferHandlers } from "./handlers/transfer.handler";
 import { registerNotificationHandlers } from "./handlers/notification.handler";
-import { getSession } from "./session";
+import { getSession, scanAndRefreshSessions } from "./session";
 import {
   createMainMenuKeyboard,
   createSendOptionsKeyboard,
+  createBackToMenuKeyboard,
 } from "./utils/keyboard";
 import http from "http";
 
 // Initialize bot with polling
 const bot = new TelegramBot(config.botToken, { polling: true });
+
+// Set up scheduled session refresh
+// Check every 5 minutes for sessions that need refreshing
+const SESSION_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
+setInterval(() => {
+  scanAndRefreshSessions();
+}, SESSION_REFRESH_INTERVAL);
 
 // Register all handlers
 registerAuthHandlers(bot);
@@ -29,6 +37,87 @@ bot.on("callback_query", (query) => {
   const callbackData = query.data;
 
   console.log(`Received callback in main handler: ${callbackData}`);
+
+  // Handle action callbacks
+  if (callbackData.startsWith("action:")) {
+    const action = callbackData.split(":")[1];
+
+    switch (action) {
+      case "login":
+        // Trigger login command programmatically
+        bot.answerCallbackQuery(query.id);
+        bot.deleteMessage(chatId, messageId);
+        bot.processUpdate({
+          update_id: Date.now(),
+          message: {
+            message_id: Date.now(),
+            from: query.from,
+            chat: { id: chatId, type: "private" },
+            date: Math.floor(Date.now() / 1000),
+            text: "/login",
+          },
+        });
+        break;
+
+      case "retry":
+        // Get the current action from session state
+        const session = getSession(chatId);
+        const currentState = session?.state?.currentAction;
+
+        if (currentState) {
+          // Redirect to the appropriate menu action
+          bot.answerCallbackQuery(query.id);
+          bot.deleteMessage(chatId, messageId);
+          bot.processUpdate({
+            update_id: Date.now(),
+            message: {
+              message_id: Date.now(),
+              from: query.from,
+              chat: { id: chatId, type: "private" },
+              date: Math.floor(Date.now() / 1000),
+              text: `/${currentState}`,
+            },
+          });
+        } else {
+          bot.answerCallbackQuery(query.id, {
+            text: "Unable to retry. Please try again manually.",
+            show_alert: true,
+          });
+        }
+        break;
+
+      case "support":
+        bot.answerCallbackQuery(query.id);
+        bot.sendMessage(
+          chatId,
+          `For support, please visit: ${config.supportLink}\n\nOr contact our team directly.`,
+          {
+            reply_markup: {
+              inline_keyboard: createBackToMenuKeyboard(),
+            },
+          }
+        );
+        break;
+
+      case "unsubscribe":
+        // Trigger unsubscribe command programmatically
+        bot.answerCallbackQuery(query.id);
+        bot.deleteMessage(chatId, messageId);
+        bot.processUpdate({
+          update_id: Date.now(),
+          message: {
+            message_id: Date.now(),
+            from: query.from,
+            chat: { id: chatId, type: "private" },
+            date: Math.floor(Date.now() / 1000),
+            text: "/unsubscribe",
+          },
+        });
+        break;
+    }
+
+    return;
+  }
 
   // Handle main menu actions
   if (callbackData.startsWith("menu:")) {
@@ -292,12 +381,19 @@ bot.onText(/\/menu/, (msg) => {
   if (!session) {
     bot.sendMessage(
       chatId,
-      "⚠️ You need to be logged in to access the menu.\nPlease use /login to authenticate."
+      "⚠️ You need to be logged in to access the menu.\nPlease use /login to authenticate.",
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🔑 Login", callback_data: "action:login" }],
+          ],
+        },
+      }
     );
     return;
   }
 
-  // Show main menu with inline keyboard
+  // Show main menu with inline keyboard directly
   bot.sendMessage(
     chatId,
     "🤖 *CopperX Payout Bot*\n\nWhat would you like to do?",

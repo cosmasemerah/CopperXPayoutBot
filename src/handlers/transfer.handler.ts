@@ -4,6 +4,7 @@ import * as transferService from "../services/transfer.service";
 import * as walletService from "../services/wallet.service";
 import { formatAmount } from "../utils/format";
 import { createYesNoKeyboard, createAmountKeyboard } from "../utils/keyboard";
+import { sendSuccessMessage, sendErrorMessage } from "../utils/message";
 import { config } from "../config";
 
 // Define the SendEmailState interface for the multi-step process
@@ -50,7 +51,14 @@ export function registerTransferHandlers(bot: TelegramBot): void {
     if (!session) {
       bot.sendMessage(
         chatId,
-        "⚠️ You need to be logged in to send funds.\nPlease use /login to authenticate."
+        "⚠️ You need to be logged in to send funds.\nPlease use /login to authenticate.",
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🔑 Login", callback_data: "action:login" }],
+            ],
+          },
+        }
       );
       return;
     }
@@ -59,7 +67,14 @@ export function registerTransferHandlers(bot: TelegramBot): void {
     bot.sendMessage(
       chatId,
       "📧 *Send Funds to Email*\n\nPlease enter the recipient's email address:",
-      { parse_mode: "Markdown" }
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "❌ Cancel", callback_data: "sendemail:cancel" }],
+          ],
+        },
+      }
     );
 
     // Initialize state machine at email step
@@ -87,7 +102,14 @@ export function registerTransferHandlers(bot: TelegramBot): void {
     bot.sendMessage(
       chatId,
       "🔑 *Send Funds to Wallet Address*\n\nPlease enter the recipient's wallet address:",
-      { parse_mode: "Markdown" }
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "❌ Cancel", callback_data: "sendwallet:cancel" }],
+          ],
+        },
+      }
     );
 
     // Initialize state machine at address step
@@ -261,12 +283,15 @@ export function registerTransferHandlers(bot: TelegramBot): void {
         historyMessage += "Use the Copperx web app for more details.";
       }
 
-      bot.sendMessage(chatId, historyMessage, { parse_mode: "Markdown" });
+      // Use sendSuccessMessage instead of bot.sendMessage to add navigation buttons
+      sendSuccessMessage(bot, chatId, historyMessage, ["balance", "send"]);
     } catch (error) {
       console.error("Transfer history fetch error:", error);
-      bot.sendMessage(
+      sendErrorMessage(
+        bot,
         chatId,
-        "❌ Failed to fetch your transaction history. Please try again later."
+        "❌ Failed to fetch your transaction history. Please try again later.",
+        "menu:history"
       );
     }
   });
@@ -290,7 +315,14 @@ export function registerTransferHandlers(bot: TelegramBot): void {
         updateSessionState(chatId, {});
         bot.sendMessage(
           chatId,
-          "⚠️ Your session has expired. Please use /login to authenticate."
+          "⚠️ Your session has expired. Please use /login to authenticate.",
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "🔑 Login", callback_data: "action:login" }],
+              ],
+            },
+          }
         );
         return;
       }
@@ -304,7 +336,14 @@ export function registerTransferHandlers(bot: TelegramBot): void {
         if (!emailRegex.test(text)) {
           bot.sendMessage(
             chatId,
-            "❌ Invalid email format. Please enter a valid email address:"
+            "❌ Invalid email format. Please enter a valid email address:",
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "❌ Cancel", callback_data: "sendemail:cancel" }],
+                ],
+              },
+            }
           );
           return;
         }
@@ -333,7 +372,14 @@ export function registerTransferHandlers(bot: TelegramBot): void {
         if (isNaN(amount) || amount <= 0) {
           bot.sendMessage(
             chatId,
-            "❌ Invalid amount. Please enter a positive number:"
+            "❌ Invalid amount. Please enter a positive number:",
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "❌ Cancel", callback_data: "sendemail:cancel" }],
+                ],
+              },
+            }
           );
           return;
         }
@@ -386,7 +432,14 @@ export function registerTransferHandlers(bot: TelegramBot): void {
         if (!addressRegex.test(text)) {
           bot.sendMessage(
             chatId,
-            "❌ Invalid wallet address format. Please enter a valid wallet address (0x followed by 40 hexadecimal characters):"
+            "❌ Invalid wallet address format. Please enter a valid wallet address (0x followed by 40 hexadecimal characters):",
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "❌ Cancel", callback_data: "sendwallet:cancel" }],
+                ],
+              },
+            }
           );
           return;
         }
@@ -423,7 +476,15 @@ export function registerTransferHandlers(bot: TelegramBot): void {
           console.error("Default wallet fetch error:", error);
           bot.sendMessage(
             chatId,
-            "❌ Failed to retrieve your default wallet information. Please try again later."
+            "❌ Failed to retrieve your default wallet information. Please try again later.",
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "🔄 Try Again", callback_data: "menu:send" }],
+                  [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+                ],
+              },
+            }
           );
           updateSessionState(chatId, {});
         }
@@ -435,7 +496,14 @@ export function registerTransferHandlers(bot: TelegramBot): void {
         if (isNaN(amount) || amount <= 0) {
           bot.sendMessage(
             chatId,
-            "❌ Invalid amount. Please enter a positive number:"
+            "❌ Invalid amount. Please enter a positive number:",
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "❌ Cancel", callback_data: "sendwallet:cancel" }],
+                ],
+              },
+            }
           );
           return;
         }
@@ -616,7 +684,14 @@ export function registerTransferHandlers(bot: TelegramBot): void {
         if (isNaN(amount) || amount <= 0) {
           bot.sendMessage(
             chatId,
-            "❌ Invalid amount. Please enter a positive number:"
+            "❌ Invalid amount. Please enter a positive number:",
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "❌ Cancel", callback_data: "withdrawbank:cancel" }],
+                ],
+              },
+            }
           );
           return;
         }
@@ -744,6 +819,7 @@ export function registerTransferHandlers(bot: TelegramBot): void {
               message_id: messageId,
               reply_markup: {
                 inline_keyboard: [
+                  [{ text: "📤 Try Again", callback_data: "menu:send" }],
                   [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
                 ],
               },
@@ -774,6 +850,7 @@ export function registerTransferHandlers(bot: TelegramBot): void {
               reply_markup: {
                 inline_keyboard: [
                   [{ text: "🔍 View Balance", callback_data: "menu:balance" }],
+                  [{ text: "📤 Send More", callback_data: "menu:send" }],
                   [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
                 ],
               },
@@ -781,11 +858,21 @@ export function registerTransferHandlers(bot: TelegramBot): void {
           );
         } catch (error: any) {
           console.error("Send to email error:", error);
-          await bot.sendMessage(
-            chatId,
+          updateSessionState(chatId, {}); // Clear state
+          bot.editMessageText(
             `❌ Transfer failed: ${
               error.response?.data?.message || "Unexpected error occurred"
-            }. Try again or visit ${config.supportLink}`
+            }. Try again or visit ${config.supportLink}`,
+            {
+              chat_id: chatId,
+              message_id: messageId,
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "📤 Try Again", callback_data: "menu:send" }],
+                  [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+                ],
+              },
+            }
           );
         }
       }
@@ -886,6 +973,7 @@ export function registerTransferHandlers(bot: TelegramBot): void {
               message_id: messageId,
               reply_markup: {
                 inline_keyboard: [
+                  [{ text: "📤 Try Again", callback_data: "menu:send" }],
                   [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
                 ],
               },
@@ -918,6 +1006,7 @@ export function registerTransferHandlers(bot: TelegramBot): void {
               reply_markup: {
                 inline_keyboard: [
                   [{ text: "🔍 View Balance", callback_data: "menu:balance" }],
+                  [{ text: "📤 Send More", callback_data: "menu:send" }],
                   [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
                 ],
               },
@@ -925,19 +1014,41 @@ export function registerTransferHandlers(bot: TelegramBot): void {
           );
         } catch (error: any) {
           console.error("Send to wallet error:", error);
-          await bot.sendMessage(
-            chatId,
+          updateSessionState(chatId, {}); // Clear state
+          bot.editMessageText(
             `❌ Transfer failed: ${
               error.response?.data?.message || "Unexpected error occurred"
-            }. Try again or visit ${config.supportLink}`
+            }. Try again or visit ${config.supportLink}`,
+            {
+              chat_id: chatId,
+              message_id: messageId,
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "📤 Try Again", callback_data: "menu:send" }],
+                  [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+                ],
+              },
+            }
           );
         }
       }
       // Handle cancellation
       else if (action === "cancel") {
-        bot.answerCallbackQuery(query.id, { text: "Operation cancelled" });
+        bot.answerCallbackQuery(query.id);
+        // Clear state
         updateSessionState(chatId, {});
-        bot.deleteMessage(chatId, messageId);
+
+        // Show cancellation message with menu instead of deleting the message
+        bot.editMessageText("🚫 Transfer cancelled. No funds have been sent.", {
+          chat_id: chatId,
+          message_id: messageId,
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "📤 Try Again", callback_data: "menu:send" }],
+              [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+            ],
+          },
+        });
       }
     }
     // Handle deposit flow callbacks
@@ -1073,9 +1184,24 @@ export function registerTransferHandlers(bot: TelegramBot): void {
       }
       // Handle cancellation
       else if (action === "cancel") {
-        bot.answerCallbackQuery(query.id, { text: "Operation cancelled" });
+        bot.answerCallbackQuery(query.id);
+        // Clear state
         updateSessionState(chatId, {});
-        bot.deleteMessage(chatId, messageId);
+
+        // Show cancellation message with menu instead of deleting the message
+        bot.editMessageText(
+          "🚫 Deposit cancelled. No transaction has been initiated.",
+          {
+            chat_id: chatId,
+            message_id: messageId,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "📥 Try Again", callback_data: "menu:deposit" }],
+                [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+              ],
+            },
+          }
+        );
       }
     }
     // Handle bank withdrawal flow callbacks
@@ -1152,6 +1278,7 @@ export function registerTransferHandlers(bot: TelegramBot): void {
               message_id: messageId,
               reply_markup: {
                 inline_keyboard: [
+                  [{ text: "🏧 Try Again", callback_data: "menu:withdraw" }],
                   [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
                 ],
               },
@@ -1211,14 +1338,69 @@ export function registerTransferHandlers(bot: TelegramBot): void {
       }
       // Handle cancellation
       else if (action === "cancel") {
-        bot.answerCallbackQuery(query.id, { text: "Operation cancelled" });
+        bot.answerCallbackQuery(query.id);
+        // Clear state
         updateSessionState(chatId, {});
-        bot.deleteMessage(chatId, messageId);
+
+        // Show cancellation message with menu instead of deleting the message
+        bot.editMessageText(
+          "🚫 Withdrawal cancelled. No funds have been withdrawn.",
+          {
+            chat_id: chatId,
+            message_id: messageId,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "🏧 Try Again", callback_data: "menu:withdraw" }],
+                [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+              ],
+            },
+          }
+        );
       }
     }
     // Handle return to menu callbacks
     else if (callbackData === "return:menu") {
       // This is now handled in the main index.ts file
+      return;
+    }
+
+    // Handle cancellation
+    if (callbackData === "sendemail:cancel") {
+      bot.answerCallbackQuery(query.id);
+      // Clear state
+      updateSessionState(chatId, {});
+
+      // Show cancellation message with menu
+      bot.editMessageText("🚫 Operation cancelled. No funds have been sent.", {
+        chat_id: chatId,
+        message_id: messageId,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "📤 Try Again", callback_data: "menu:send" }],
+            [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+          ],
+        },
+      });
+      return;
+    }
+
+    // Handle sendwallet cancellation
+    if (callbackData === "sendwallet:cancel") {
+      bot.answerCallbackQuery(query.id);
+      // Clear state
+      updateSessionState(chatId, {});
+
+      // Show cancellation message with menu
+      bot.editMessageText("🚫 Operation cancelled. No funds have been sent.", {
+        chat_id: chatId,
+        message_id: messageId,
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "📤 Try Again", callback_data: "menu:send" }],
+            [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+          ],
+        },
+      });
       return;
     }
   });

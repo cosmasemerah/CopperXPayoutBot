@@ -5,7 +5,12 @@ import * as notificationService from "../services/notification.service";
 import { ExtendedSession } from "../session";
 import { KYCStatus } from "../types";
 import { config } from "../config";
-import { createMainMenuKeyboard } from "../utils/keyboard";
+import {
+  createMainMenuKeyboard,
+  createActionKeyboard,
+  createBackToMenuKeyboard,
+} from "../utils/keyboard";
+import { sendSuccessMessage, sendErrorMessage } from "../utils/message";
 
 // Map to track active notification subscriptions for deposit events
 const activeSubscriptions = new Map<number, any>();
@@ -46,14 +51,22 @@ export function registerAuthHandlers(bot: TelegramBot): void {
         }
       );
     } else {
-      // New user, show welcome message
+      // New user, show welcome message with login button
       bot.sendMessage(
         chatId,
         `Welcome ${username} to the Copperx Payout Bot! 🚀\n\n` +
           `I can help you manage your Copperx payouts directly through Telegram.\n\n` +
           `🔑 Use /login to authenticate\n` +
           `❓ Use /help to see all available commands\n\n` +
-          `Need support? Visit ${config.supportLink}`
+          `Need support? Visit ${config.supportLink}`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🔑 Login", callback_data: "action:login" }],
+              [{ text: "❓ Help", callback_data: "menu:help" }],
+            ],
+          },
+        }
       );
     }
   });
@@ -67,7 +80,12 @@ export function registerAuthHandlers(bot: TelegramBot): void {
     if (session) {
       bot.sendMessage(
         chatId,
-        "You are already logged in. Use /logout to sign out first."
+        "You are already logged in. Use /logout to sign out first.",
+        {
+          reply_markup: {
+            inline_keyboard: createActionKeyboard(["profile", "balance"]),
+          },
+        }
       );
       return;
     }
@@ -100,9 +118,21 @@ export function registerAuthHandlers(bot: TelegramBot): void {
 
     if (getSession(chatId)) {
       deleteSession(chatId);
-      bot.sendMessage(chatId, "You have been successfully logged out. 👋");
+      bot.sendMessage(chatId, "You have been successfully logged out. 👋", {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🔑 Login Again", callback_data: "action:login" }],
+          ],
+        },
+      });
     } else {
-      bot.sendMessage(chatId, "You are not logged in.");
+      bot.sendMessage(chatId, "You are not logged in.", {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🔑 Login", callback_data: "action:login" }],
+          ],
+        },
+      });
     }
   });
 
@@ -115,7 +145,14 @@ export function registerAuthHandlers(bot: TelegramBot): void {
     if (!session) {
       bot.sendMessage(
         chatId,
-        "⚠️ You need to be logged in to view your profile.\nPlease use /login to authenticate."
+        "⚠️ You need to be logged in to view your profile.\nPlease use /login to authenticate.",
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🔑 Login", callback_data: "action:login" }],
+            ],
+          },
+        }
       );
       return;
     }
@@ -133,14 +170,17 @@ export function registerAuthHandlers(bot: TelegramBot): void {
         `*Status*: ${user.status}\n` +
         `*Role*: ${user.role}`;
 
-      bot.sendMessage(chatId, profileMessage, { parse_mode: "Markdown" });
+      // Send with navigation options
+      sendSuccessMessage(bot, chatId, profileMessage, ["balance", "kyc"]);
     } catch (error: any) {
       console.error("Profile fetch error:", error);
-      bot.sendMessage(
+      sendErrorMessage(
+        bot,
         chatId,
         `❌ Profile fetch failed: ${
           error.response?.data?.message || "Could not retrieve your profile"
-        }. Try again or visit ${config.supportLink}`
+        }. Try again or visit ${config.supportLink}`,
+        "menu:profile"
       );
     }
   });
@@ -154,7 +194,14 @@ export function registerAuthHandlers(bot: TelegramBot): void {
     if (!session) {
       bot.sendMessage(
         chatId,
-        "⚠️ You need to be logged in to check your KYC status.\nPlease use /login to authenticate."
+        "⚠️ You need to be logged in to check your KYC status.\nPlease use /login to authenticate.",
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🔑 Login", callback_data: "action:login" }],
+            ],
+          },
+        }
       );
       return;
     }
@@ -164,12 +211,13 @@ export function registerAuthHandlers(bot: TelegramBot): void {
       const kycResponse = await authService.getKYCStatus(session.token);
 
       if (kycResponse.data.length === 0) {
-        bot.sendMessage(
+        sendSuccessMessage(
+          bot,
           chatId,
           "📋 *KYC Status*\n\n" +
             "You haven't started the KYC process yet.\n" +
             "Please complete your KYC at https://copperx.io/kyc",
-          { parse_mode: "Markdown" }
+          ["profile"]
         );
         return;
       }
@@ -194,16 +242,18 @@ export function registerAuthHandlers(bot: TelegramBot): void {
         statusMessage = `🔍 Your KYC status is: *${kycData.status}*\nVisit https://copperx.io/kyc for more details.`;
       }
 
-      bot.sendMessage(chatId, `📋 *KYC Status*\n\n${statusMessage}`, {
-        parse_mode: "Markdown",
-      });
+      sendSuccessMessage(bot, chatId, `📋 *KYC Status*\n\n${statusMessage}`, [
+        "profile",
+      ]);
     } catch (error: any) {
       console.error("KYC status fetch error:", error);
-      bot.sendMessage(
+      sendErrorMessage(
+        bot,
         chatId,
         `❌ KYC check failed: ${
           error.response?.data?.message || "Could not retrieve your KYC status"
-        }. Try again or visit ${config.supportLink}`
+        }. Try again or visit ${config.supportLink}`,
+        "menu:kyc"
       );
     }
   });
@@ -223,21 +273,30 @@ export function registerAuthHandlers(bot: TelegramBot): void {
         }
 
         activeSubscriptions.delete(chatId);
-        bot.sendMessage(
+        sendSuccessMessage(
+          bot,
           chatId,
-          "✅ Successfully unsubscribed from deposit notifications."
+          "✅ Successfully unsubscribed from deposit notifications.",
+          []
         );
       } catch (error) {
         console.error("Unsubscribe error:", error);
-        bot.sendMessage(
+        sendErrorMessage(
+          bot,
           chatId,
-          "❌ Error while unsubscribing. Please try again."
+          "❌ Error while unsubscribing. Please try again.",
+          "action:unsubscribe"
         );
       }
     } else {
       bot.sendMessage(
         chatId,
-        "You are not currently subscribed to deposit notifications."
+        "You are not currently subscribed to deposit notifications.",
+        {
+          reply_markup: {
+            inline_keyboard: createBackToMenuKeyboard(),
+          },
+        }
       );
     }
   });
@@ -265,7 +324,15 @@ export function registerAuthHandlers(bot: TelegramBot): void {
         "❓ /help - Show this guide\n\n" +
         `*Tip*: Use /menu anytime to access the interactive dashboard menu!\n\n` +
         `Support: ${config.supportLink}`,
-      { parse_mode: "Markdown" }
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "📋 Open Menu", callback_data: "return:menu" }],
+            [{ text: "🔑 Login", callback_data: "action:login" }],
+          ],
+        },
+      }
     );
   });
 
@@ -286,7 +353,14 @@ export function registerAuthHandlers(bot: TelegramBot): void {
       if (!emailRegex.test(text)) {
         bot.sendMessage(
           chatId,
-          "Invalid email format. Please use /login to try again."
+          "Invalid email format. Please use /login to try again.",
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "🔄 Try Again", callback_data: "action:login" }],
+              ],
+            },
+          }
         );
         return;
       }
@@ -306,7 +380,15 @@ export function registerAuthHandlers(bot: TelegramBot): void {
           chatId,
           `❌ Login failed: ${
             error.response?.data?.message || "Could not send OTP"
-          }. Try again or visit ${config.supportLink}`
+          }. Try again or visit ${config.supportLink}`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "🔄 Try Again", callback_data: "action:login" }],
+                [{ text: "📞 Support", callback_data: "action:support" }],
+              ],
+            },
+          }
         );
       }
       return;
@@ -315,7 +397,6 @@ export function registerAuthHandlers(bot: TelegramBot): void {
     // Handle OTP input
     if (awaitingOTP.has(chatId)) {
       const otpState = awaitingOTP.get(chatId)!;
-      awaitingOTP.delete(chatId);
 
       try {
         // Verify OTP
@@ -324,6 +405,9 @@ export function registerAuthHandlers(bot: TelegramBot): void {
           text,
           otpState.sid
         );
+
+        // Clear OTP state on success
+        awaitingOTP.delete(chatId);
 
         // Create session
         const session: ExtendedSession = {
@@ -368,12 +452,160 @@ export function registerAuthHandlers(bot: TelegramBot): void {
         );
       } catch (error: any) {
         console.error("Authentication error:", error);
+        // Don't delete the OTP state, keep it for retry
         bot.sendMessage(
           chatId,
           `❌ Login failed: ${
             error.response?.data?.message ||
             "Invalid OTP or authentication failed"
-          }. Try again or visit ${config.supportLink}`
+          }. Please try entering the correct OTP again.`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "🔄 Request New OTP",
+                    callback_data: "action:request_new_otp",
+                  },
+                ],
+                [
+                  {
+                    text: "❌ Cancel Login",
+                    callback_data: "action:cancel_login",
+                  },
+                ],
+              ],
+            },
+          }
+        );
+      }
+      return;
+    }
+  });
+
+  // Handle callbacks
+  bot.on("callback_query", async (query) => {
+    if (!query.message || !query.data) return;
+
+    const chatId = query.message.chat.id;
+    const messageId = query.message.message_id;
+    const callbackData = query.data;
+
+    // Handle only auth-related callbacks
+    if (callbackData === "action:login") {
+      try {
+        bot.answerCallbackQuery(query.id);
+
+        // Instead of deleting and sending a new message, edit the current one
+        bot.editMessageText(
+          "Please enter your email address to receive an OTP:",
+          {
+            chat_id: chatId,
+            message_id: messageId,
+          }
+        );
+
+        // Set the awaiting email flag
+        awaitingEmail.set(chatId, true);
+      } catch (error) {
+        console.error("Error in login callback:", error);
+        // Don't throw, just log the error
+      }
+      return;
+    }
+
+    // Handle cancel login callback
+    if (callbackData === "action:cancel_login") {
+      // Clear any login states
+      awaitingEmail.delete(chatId);
+      awaitingOTP.delete(chatId);
+
+      bot.answerCallbackQuery(query.id, {
+        text: "Login cancelled.",
+      });
+
+      bot.editMessageText(
+        "Login process cancelled. You can start again anytime with /login.",
+        {
+          chat_id: chatId,
+          message_id: messageId,
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🔑 Login", callback_data: "action:login" }],
+              [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+            ],
+          },
+        }
+      );
+      return;
+    }
+
+    // Handle request new OTP callback
+    if (callbackData === "action:request_new_otp") {
+      bot.answerCallbackQuery(query.id);
+
+      if (awaitingOTP.has(chatId)) {
+        const otpState = awaitingOTP.get(chatId)!;
+
+        try {
+          // Request a new OTP for the same email
+          const { email, sid } = await authService.requestEmailOTP(
+            otpState.email
+          );
+
+          // Update with new session ID
+          awaitingOTP.set(chatId, { email, sid });
+
+          bot.editMessageText(
+            `New OTP has been sent to ${otpState.email}. Please enter it here:`,
+            {
+              chat_id: chatId,
+              message_id: messageId,
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: "❌ Cancel Login",
+                      callback_data: "action:cancel_login",
+                    },
+                  ],
+                ],
+              },
+            }
+          );
+        } catch (error: any) {
+          console.error("OTP re-request error:", error);
+          bot.editMessageText(
+            `❌ Failed to send a new OTP: ${
+              error.response?.data?.message || "Could not send OTP"
+            }. Try again or visit ${config.supportLink}`,
+            {
+              chat_id: chatId,
+              message_id: messageId,
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "🔄 Try Again", callback_data: "action:login" }],
+                  [{ text: "📞 Support", callback_data: "action:support" }],
+                ],
+              },
+            }
+          );
+          // Clear the OTP state as it failed
+          awaitingOTP.delete(chatId);
+        }
+      } else {
+        // If somehow the OTP state was lost, restart login
+        bot.editMessageText(
+          "Session expired. Please start the login process again.",
+          {
+            chat_id: chatId,
+            message_id: messageId,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "🔑 Login", callback_data: "action:login" }],
+              ],
+            },
+          }
         );
       }
       return;

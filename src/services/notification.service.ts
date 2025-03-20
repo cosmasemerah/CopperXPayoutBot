@@ -2,6 +2,7 @@ import Pusher from "pusher-js";
 import axios from "axios";
 import TelegramBot from "node-telegram-bot-api";
 import { config } from "../config";
+import { createActionKeyboard } from "../utils/keyboard";
 
 interface PusherAuthorizer {
   authorize: (
@@ -74,7 +75,12 @@ export function subscribeToDepositNotifications(
       // Send confirmation message to user
       bot.sendMessage(
         chatId,
-        "✅ Successfully subscribed to deposit notifications! You will be notified when you receive deposits."
+        "✅ Successfully subscribed to deposit notifications! You will be notified when you receive deposits.",
+        {
+          reply_markup: {
+            inline_keyboard: createActionKeyboard([]),
+          },
+        }
       );
     });
 
@@ -82,7 +88,12 @@ export function subscribeToDepositNotifications(
       console.error("Subscription error:", error);
       bot.sendMessage(
         chatId,
-        "❌ Failed to subscribe to notifications. Please try again later."
+        "❌ Failed to subscribe to notifications. Please try again later.",
+        {
+          reply_markup: {
+            inline_keyboard: createActionKeyboard(["support"]),
+          },
+        }
       );
     });
 
@@ -95,7 +106,12 @@ export function subscribeToDepositNotifications(
             data.network || "your wallet"
           }\n\n` +
           `Use /balance to view your updated wallet balances.`,
-        { parse_mode: "Markdown" }
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: createActionKeyboard(["balance", "history"]),
+          },
+        }
       );
     });
 
@@ -104,7 +120,12 @@ export function subscribeToDepositNotifications(
     console.error("Error setting up Pusher:", error);
     bot.sendMessage(
       chatId,
-      "❌ Failed to set up notifications. Please try again later."
+      "❌ Failed to set up notifications. Please try again later.",
+      {
+        reply_markup: {
+          inline_keyboard: createActionKeyboard(["support"]),
+        },
+      }
     );
     return null;
   }

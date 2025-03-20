@@ -2,7 +2,15 @@ import TelegramBot from "node-telegram-bot-api";
 import { getSession, updateSessionState, getSessionState } from "../session";
 import * as walletService from "../services/wallet.service";
 import { formatWalletBalances } from "../utils/format";
-import { createWalletSelectionKeyboard } from "../utils/keyboard";
+import {
+  createWalletSelectionKeyboard,
+  createActionKeyboard,
+} from "../utils/keyboard";
+import {
+  sendSuccessMessage,
+  sendErrorMessage,
+  updateToConfirmation,
+} from "../utils/message";
 import { config } from "../config";
 
 // Network ID to name mapping
@@ -30,7 +38,14 @@ export function registerWalletHandlers(bot: TelegramBot): void {
     if (!session) {
       bot.sendMessage(
         chatId,
-        "⚠️ You need to be logged in to view your wallet balances.\nPlease use /login to authenticate."
+        "⚠️ You need to be logged in to view your wallet balances.\nPlease use /login to authenticate.",
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🔑 Login", callback_data: "action:login" }],
+            ],
+          },
+        }
       );
       return;
     }
@@ -48,12 +63,13 @@ export function registerWalletHandlers(bot: TelegramBot): void {
       );
 
       if (walletBalances.length === 0) {
-        bot.sendMessage(
+        sendSuccessMessage(
+          bot,
           chatId,
           "💰 *Wallet Balances*\n\n" +
             "You don't have any wallets yet.\n" +
             "Please visit https://copperx.io to create a wallet.",
-          { parse_mode: "Markdown" }
+          []
         );
         return;
       }
@@ -66,15 +82,22 @@ export function registerWalletHandlers(bot: TelegramBot): void {
         balanceMessage +
         "\nUse /setdefaultwallet to change your default wallet.";
 
-      bot.sendMessage(chatId, messageWithHint, { parse_mode: "Markdown" });
+      // Send with action buttons
+      sendSuccessMessage(bot, chatId, messageWithHint, [
+        "deposit",
+        "send",
+        "setdefaultwallet",
+      ]);
     } catch (error: any) {
       console.error("Wallet balances fetch error:", error);
-      bot.sendMessage(
+      sendErrorMessage(
+        bot,
         chatId,
         `❌ Balance check failed: ${
           error.response?.data?.message ||
           "Could not retrieve your wallet balances"
-        }. Try again or visit ${config.supportLink}`
+        }. Try again or visit ${config.supportLink}`,
+        "menu:balance"
       );
     }
   });
@@ -88,7 +111,14 @@ export function registerWalletHandlers(bot: TelegramBot): void {
     if (!session) {
       bot.sendMessage(
         chatId,
-        "⚠️ You need to be logged in to set your default wallet.\nPlease use /login to authenticate."
+        "⚠️ You need to be logged in to set your default wallet.\nPlease use /login to authenticate.",
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🔑 Login", callback_data: "action:login" }],
+            ],
+          },
+        }
       );
       return;
     }
@@ -106,9 +136,11 @@ export function registerWalletHandlers(bot: TelegramBot): void {
       );
 
       if (walletBalances.length === 0) {
-        bot.sendMessage(
+        sendSuccessMessage(
+          bot,
           chatId,
-          "⚠️ You don't have any wallets yet.\nPlease visit https://copperx.io to create a wallet."
+          "⚠️ You don't have any wallets yet.\nPlease visit https://copperx.io to create a wallet.",
+          []
         );
         return;
       }
@@ -129,11 +161,13 @@ export function registerWalletHandlers(bot: TelegramBot): void {
       });
     } catch (error: any) {
       console.error("Wallet fetch error:", error);
-      bot.sendMessage(
+      sendErrorMessage(
+        bot,
         chatId,
         `❌ Wallet operation failed: ${
           error.response?.data?.message || "Could not retrieve your wallets"
-        }. Try again or visit ${config.supportLink}`
+        }. Try again or visit ${config.supportLink}`,
+        "menu:setdefaultwallet"
       );
     }
   });
@@ -178,6 +212,17 @@ export function registerWalletHandlers(bot: TelegramBot): void {
       bot.answerCallbackQuery(query.id, { text: "Operation cancelled" });
       updateSessionState(chatId, {});
       bot.deleteMessage(chatId, messageId);
+
+      // Show main menu after cancellation
+      bot.sendMessage(
+        chatId,
+        "Operation cancelled. What would you like to do?",
+        {
+          reply_markup: {
+            inline_keyboard: createActionKeyboard(["balance"]),
+          },
+        }
+      );
       return;
     }
 
@@ -202,18 +247,12 @@ export function registerWalletHandlers(bot: TelegramBot): void {
         updateSessionState(chatId, {});
 
         // Update the message to show success
-        bot.editMessageText(
+        updateToConfirmation(
+          bot,
+          chatId,
+          messageId,
           "✅ Default wallet set successfully! Use /balance to view your updated wallets.",
-          {
-            chat_id: chatId,
-            message_id: messageId,
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: "🔍 View Balance", callback_data: "menu:balance" }],
-                [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
-              ],
-            },
-          }
+          ["balance"]
         );
       } catch (error: any) {
         console.error("Set default wallet error:", error);
