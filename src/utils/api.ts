@@ -10,6 +10,36 @@ const apiClient = axios.create({
 });
 
 /**
+ * Log API error details with full validation messages
+ * @param error The error object
+ * @param config The request configuration
+ */
+function logApiError(error: any, config: any) {
+  console.error("API Error Response:", {
+    status: error.response?.status,
+    headers: error.response?.headers,
+    data: error.response?.data,
+  });
+
+  // Log the full validation messages
+  if (
+    error.response?.data?.message &&
+    Array.isArray(error.response.data.message)
+  ) {
+    console.log(
+      "Validation Errors (Full Details):",
+      JSON.stringify(error.response.data.message, null, 2)
+    );
+  }
+
+  console.log("API Request Config:", {
+    method: config.method,
+    url: config.url,
+    data: config.data,
+  });
+}
+
+/**
  * Make a GET request to the API
  * @param url The API endpoint
  * @param token Optional authentication token
@@ -33,6 +63,7 @@ export async function get<T>(
     const response: AxiosResponse<T> = await apiClient.get(url, config);
     return response.data;
   } catch (error) {
+    logApiError(error, { method: "get", url });
     handleApiError(error as AxiosError);
     throw error;
   }
@@ -64,6 +95,37 @@ export async function post<T>(
     const response: AxiosResponse<T> = await apiClient.post(url, data, config);
     return response.data;
   } catch (error) {
+    logApiError(error, { method: "post", url, data });
+    handleApiError(error as AxiosError);
+    throw error;
+  }
+}
+
+/**
+ * Make a DELETE request to the API
+ * @param url The API endpoint
+ * @param token Optional authentication token
+ * @param options Additional axios options
+ * @returns Promise with the response data
+ */
+export async function del<T>(
+  url: string,
+  token?: string,
+  options?: AxiosRequestConfig
+): Promise<T> {
+  try {
+    const config: AxiosRequestConfig = {
+      ...options,
+      headers: {
+        ...(options?.headers || {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    };
+
+    const response: AxiosResponse<T> = await apiClient.delete(url, config);
+    return response.data;
+  } catch (error) {
+    logApiError(error, { method: "delete", url });
     handleApiError(error as AxiosError);
     throw error;
   }

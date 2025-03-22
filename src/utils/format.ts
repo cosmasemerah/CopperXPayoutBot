@@ -26,50 +26,40 @@ export function formatAmount(
   return numAmount.toFixed(decimals);
 }
 
-/**
- * Format network IDs to human-readable names
- * @param networkId The network ID to format
- * @param networkNames Map of network IDs to names
- * @returns The formatted network name
- */
-export function formatNetworkName(
-  networkId: string,
-  networkNames: Record<string, string>
-): string {
-  return networkNames[networkId] || `Network ${networkId}`;
-}
+// Import the getNetworkName function
+import { getNetworkName } from "./networkConstants";
 
 /**
  * Create a Markdown formatted message for wallet balances
- * @param wallets The wallet balances to format
- * @param networkNames Map of network IDs to names
+ * @param walletBalances The wallet balances array
+ * @param walletData The wallet data array with wallet addresses
  * @returns The formatted message
  */
 export function formatWalletBalances(
-  wallets: any[],
-  networkNames: Record<string, string>
+  walletBalances: any[],
+  walletData: any[]
 ): string {
-  if (!wallets || wallets.length === 0) {
+  if (!walletBalances || walletBalances.length === 0) {
     return "You don't have any wallets yet.";
   }
 
   let message = "💰 *Wallet Balances*\n\n";
 
-  wallets.forEach((wallet) => {
-    const networkName = formatNetworkName(wallet.network, networkNames);
-    message += `*Network*: ${networkName} (${wallet.network})\n`;
-    message += `*Default*: ${wallet.isDefault ? "Yes" : "No"}\n`;
-    message += `*Wallet ID*: \`${wallet.walletId}\`\n`;
+  walletBalances.forEach((wallet) => {
+    const networkName = getNetworkName(wallet.network);
+    message += `💎 *${networkName}*${wallet.isDefault ? " (Default)" : ""}\n`;
+
+    // Find the corresponding wallet data with the address
+    const walletInfo = walletData.find((w) => w.id === wallet.walletId);
+    if (walletInfo && walletInfo.walletAddress) {
+      message += `Wallet: \`${walletInfo.walletAddress}\`\n`;
+    }
 
     if (!wallet.balances || wallet.balances.length === 0) {
-      message += "*Balances*: No balances found\n\n";
+      message += "No balances found\n\n";
     } else {
-      message += "*Balances*:\n";
       wallet.balances.forEach((balance: any) => {
-        message += `  • ${formatAmount(balance.balance, balance.decimals)} ${
-          balance.symbol
-        }\n`;
-        message += `    Address: \`${balance.address}\`\n`;
+        message += `• *${formatAmount(balance.balance)} ${balance.symbol}*\n`;
       });
       message += "\n";
     }

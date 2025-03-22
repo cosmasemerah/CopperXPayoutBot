@@ -305,6 +305,10 @@ export function registerAuthHandlers(bot: TelegramBot): void {
   bot.onText(/\/help/, (msg: TelegramBot.Message) => {
     const chatId = msg.chat.id;
 
+    // Check if user is logged in
+    const session = getSession(chatId);
+    const isLoggedIn = !!session;
+
     bot.sendMessage(
       chatId,
       "📚 *Command Reference*\n\n" +
@@ -329,7 +333,13 @@ export function registerAuthHandlers(bot: TelegramBot): void {
         reply_markup: {
           inline_keyboard: [
             [{ text: "📋 Open Menu", callback_data: "return:menu" }],
-            [{ text: "🔑 Login", callback_data: "action:login" }],
+            // Show logout if logged in, otherwise show login
+            [
+              {
+                text: isLoggedIn ? "👋 Logout" : "🔑 Login",
+                callback_data: isLoggedIn ? "action:logout" : "action:login",
+              },
+            ],
           ],
         },
       }
@@ -414,6 +424,7 @@ export function registerAuthHandlers(bot: TelegramBot): void {
           token: authResponse.accessToken,
           expireAt: new Date(authResponse.expireAt),
           organizationId: authResponse.user.organizationId,
+          lastActivity: new Date(),
         };
 
         setSession(chatId, session);
@@ -514,6 +525,56 @@ export function registerAuthHandlers(bot: TelegramBot): void {
       return;
     }
 
+    // Handle logout callback
+    if (callbackData === "action:logout") {
+      try {
+        bot.answerCallbackQuery(query.id);
+
+        // Clean up any active subscriptions
+        if (activeSubscriptions.has(chatId)) {
+          const channel = activeSubscriptions.get(chatId);
+          try {
+            if (channel) {
+              channel.unbind_all();
+              channel.unsubscribe();
+            }
+            activeSubscriptions.delete(chatId);
+          } catch (error) {
+            console.error("Error cleaning up subscriptions on logout:", error);
+          }
+        }
+
+        // Delete the session if exists
+        if (getSession(chatId)) {
+          deleteSession(chatId);
+          bot.editMessageText("You have been successfully logged out. 👋", {
+            chat_id: chatId,
+            message_id: messageId,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "🔑 Login Again", callback_data: "action:login" }],
+                [{ text: "« Back to Menu", callback_data: "return:menu" }],
+              ],
+            },
+          });
+        } else {
+          bot.editMessageText("You are not currently logged in.", {
+            chat_id: chatId,
+            message_id: messageId,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "🔑 Login", callback_data: "action:login" }],
+                [{ text: "« Back to Menu", callback_data: "return:menu" }],
+              ],
+            },
+          });
+        }
+      } catch (error) {
+        console.error("Error in logout callback:", error);
+      }
+      return;
+    }
+
     // Handle cancel login callback
     if (callbackData === "action:cancel_login") {
       // Clear any login states
@@ -532,7 +593,7 @@ export function registerAuthHandlers(bot: TelegramBot): void {
           reply_markup: {
             inline_keyboard: [
               [{ text: "🔑 Login", callback_data: "action:login" }],
-              [{ text: "📋 Back to Menu", callback_data: "return:menu" }],
+              [{ text: "« Back to Menu", callback_data: "return:menu" }],
             ],
           },
         }

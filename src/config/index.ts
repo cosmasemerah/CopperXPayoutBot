@@ -10,6 +10,12 @@ export const config = {
     cluster: process.env.PUSHER_CLUSTER || "ap1",
   },
   supportLink: "https://t.me/copperxcommunity/2183",
+  session: {
+    encryptionKey:
+      process.env.SESSION_ENCRYPTION_KEY ||
+      "default-secure-key-for-local-development-only",
+    inactivityTimeout: 5 * 24 * 60 * 60 * 1000, // 5 days in milliseconds
+  },
 };
 
 // Validation

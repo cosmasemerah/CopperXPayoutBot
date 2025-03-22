@@ -1,5 +1,12 @@
 import TelegramBot from "node-telegram-bot-api";
-import { createActionKeyboard, createErrorActionKeyboard } from "./keyboard";
+import {
+  createActionKeyboard,
+  createErrorActionKeyboard,
+  createQRCodeResponseKeyboard,
+} from "./keyboard";
+import { getNetworkName } from "./networkConstants";
+import QRCode from "qrcode";
+import { logger } from "./logger";
 
 /**
  * Send a success message with navigation options
@@ -94,5 +101,56 @@ export function sendConfirmationMessage(
         ],
       ],
     },
+  });
+}
+
+/**
+ * Generate and send a QR code for a wallet address
+ * @param bot The Telegram bot instance
+ * @param chatId The chat ID to send the message to
+ * @param walletAddress The wallet address to encode in the QR code
+ * @param network The network of the wallet
+ * @returns Promise that resolves when QR code is sent
+ */
+export function sendWalletQRCode(
+  bot: TelegramBot,
+  chatId: number,
+  walletAddress: string,
+  network: string | undefined
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // Generate QR code using the qrcode package with margin options
+    QRCode.toDataURL(
+      walletAddress,
+      { width: 250, margin: 4 },
+      (err, qrCodeDataUrl) => {
+        if (err) {
+          logger.error("Error generating QR code:", { error: err });
+          reject(err);
+          return;
+        }
+
+        // Convert the data URL to a Buffer
+        const base64Data = qrCodeDataUrl.replace(
+          /^data:image\/\w+;base64,/,
+          ""
+        );
+        const photoBuffer = Buffer.from(base64Data, "base64");
+
+        // Send QR code image using the Buffer
+        bot
+          .sendPhoto(chatId, photoBuffer, {
+            caption: `QR Code for wallet address:\n\`${walletAddress}\`\n\nScan with your wallet app to deposit USDC on ${getNetworkName(
+              network
+            )} network.`,
+            parse_mode: "Markdown",
+            reply_markup: {
+              inline_keyboard: createQRCodeResponseKeyboard(),
+            },
+          })
+          .then(() => resolve())
+          .catch((error) => reject(error));
+      }
+    );
   });
 }

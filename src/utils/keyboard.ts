@@ -1,5 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
-import { WalletBalance } from "../types";
+import { WalletBalance, SourceOfFunds } from "../types";
+import { getPurposeCodes } from "./helpers";
+import { getNetworkName } from "./networkConstants";
 
 /**
  * Generate a standardized callback data string
@@ -54,7 +56,7 @@ export function createWalletSelectionKeyboard(
   const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
 
   wallets.forEach((wallet) => {
-    const networkName = wallet.network || "Unknown";
+    const networkName = getNetworkName(wallet.network);
     const isDefault = wallet.isDefault ? " (Default)" : "";
     const buttonText = `${networkName}${isDefault}`;
 
@@ -75,6 +77,94 @@ export function createWalletSelectionKeyboard(
   ]);
 
   return keyboard;
+}
+
+/**
+ * Create a keyboard with wallet options for deposit
+ * @param wallets Array of wallet objects
+ * @returns An inline keyboard markup with wallet options for deposit
+ */
+export function createDepositWalletSelectionKeyboard(
+  wallets: any[]
+): TelegramBot.InlineKeyboardButton[][] {
+  const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
+
+  wallets.forEach((wallet) => {
+    const networkName = getNetworkName(wallet.network);
+    const isDefault = wallet.isDefault ? " (Default)" : "";
+    const buttonText = `${networkName}${isDefault}`;
+
+    keyboard.push([
+      {
+        text: buttonText,
+        callback_data: `deposit:wallet:${wallet.id}:${wallet.network}`,
+      },
+    ]);
+  });
+
+  // Add cancel button
+  keyboard.push([
+    {
+      text: "❌ Cancel",
+      callback_data: "deposit:cancel",
+    },
+  ]);
+
+  return keyboard;
+}
+
+/**
+ * Create a keyboard with QR code, cancel, and main menu options for deposit
+ * @param walletId The wallet ID for generating QR code
+ * @returns An inline keyboard markup with QR code and navigation buttons
+ */
+export function createDepositActionsKeyboard(
+  walletId: string
+): TelegramBot.InlineKeyboardButton[][] {
+  return [
+    [
+      {
+        text: "📱 Generate QR Code",
+        callback_data: `deposit:qrcode:${walletId}`,
+      },
+    ],
+    [
+      {
+        text: "❌ Cancel",
+        callback_data: "deposit:cancel",
+      },
+      {
+        text: "« Back to Menu",
+        callback_data: "return:menu",
+      },
+    ],
+  ];
+}
+
+/**
+ * Create a keyboard with action buttons for QR code response
+ * @param network The network of the wallet
+ * @returns An inline keyboard markup with navigation buttons
+ */
+export function createQRCodeResponseKeyboard(): TelegramBot.InlineKeyboardButton[][] {
+  return [
+    [
+      {
+        text: "📥 New Deposit",
+        callback_data: "menu:deposit",
+      },
+      {
+        text: "💰 Balance",
+        callback_data: "menu:balance",
+      },
+    ],
+    [
+      {
+        text: "« Back to Menu",
+        callback_data: "return:menu",
+      },
+    ],
+  ];
 }
 
 /**
@@ -112,8 +202,8 @@ export function createAmountKeyboard(
 }
 
 /**
- * Create a keyboard for the main menu options
- * @returns An inline keyboard markup with main menu options
+ * Create a keyboard for the main menu
+ * @returns An inline keyboard markup for the main menu
  */
 export function createMainMenuKeyboard(): TelegramBot.InlineKeyboardButton[][] {
   return [
@@ -122,31 +212,21 @@ export function createMainMenuKeyboard(): TelegramBot.InlineKeyboardButton[][] {
         text: "💰 Balance",
         callback_data: createCallbackData("menu", "balance"),
       },
-      { text: "📤 Send", callback_data: createCallbackData("menu", "send") },
-    ],
-    [
       {
-        text: "💵 Deposit",
-        callback_data: createCallbackData("menu", "deposit"),
-      },
-      {
-        text: "🏧 Withdraw",
-        callback_data: createCallbackData("menu", "withdraw"),
-      },
-    ],
-    [
-      {
-        text: "📋 History",
+        text: "📜 History",
         callback_data: createCallbackData("menu", "history"),
       },
+    ],
+    [
+      { text: "📤 Send", callback_data: createCallbackData("menu", "send") },
       {
-        text: "👤 Profile",
-        callback_data: createCallbackData("menu", "profile"),
+        text: "📥 Deposit",
+        callback_data: createCallbackData("menu", "deposit"),
       },
     ],
     [
       {
-        text: "🔑 Set Default Wallet",
+        text: "⚙️ Set Default Wallet",
         callback_data: createCallbackData("menu", "setdefaultwallet"),
       },
       {
@@ -154,7 +234,23 @@ export function createMainMenuKeyboard(): TelegramBot.InlineKeyboardButton[][] {
         callback_data: createCallbackData("menu", "kyc"),
       },
     ],
-    [{ text: "❓ Help", callback_data: createCallbackData("menu", "help") }],
+    [
+      {
+        text: "👤 Profile",
+        callback_data: createCallbackData("menu", "profile"),
+      },
+      {
+        text: "🏦 Withdraw",
+        callback_data: createCallbackData("menu", "withdraw"),
+      },
+    ],
+    [
+      {
+        text: "👥 Payees",
+        callback_data: createCallbackData("menu", "payees"),
+      },
+      { text: "❓ Help", callback_data: createCallbackData("menu", "help") },
+    ],
   ];
 }
 
@@ -183,7 +279,7 @@ export function createBackToMenuKeyboard(): TelegramBot.InlineKeyboardButton[][]
   return [
     [
       {
-        text: "📋 Back to Menu",
+        text: "« Back to Menu",
         callback_data: createCallbackData("return", "menu"),
       },
     ],
@@ -249,8 +345,14 @@ export function createActionKeyboard(
         break;
       case "setdefaultwallet":
         actionButtons.push({
-          text: "🔑 Set Default Wallet",
+          text: "⚙ Set Default Wallet",
           callback_data: createCallbackData("menu", "setdefaultwallet"),
+        });
+        break;
+      case "refreshbalance":
+        actionButtons.push({
+          text: "🔄 Refresh Balance",
+          callback_data: createCallbackData("action", "refreshbalance"),
         });
         break;
       case "support":
@@ -274,7 +376,7 @@ export function createActionKeyboard(
   // Always add back to menu button
   keyboard.push([
     {
-      text: "📋 Back to Menu",
+      text: "« Back to Menu",
       callback_data: createCallbackData("return", "menu"),
     },
   ]);
@@ -294,9 +396,86 @@ export function createErrorActionKeyboard(
     [
       { text: "🔄 Try Again", callback_data: retryCallback },
       {
-        text: "📋 Back to Menu",
+        text: "« Back to Menu",
         callback_data: createCallbackData("return", "menu"),
       },
     ],
   ];
+}
+
+/**
+ * Create a keyboard with purpose code options
+ * @param prefix The callback data prefix for the action (e.g., "sendemail", "bankwithdraw", etc.)
+ * @returns Inline keyboard with purpose code options
+ */
+export function createPurposeCodeKeyboard(
+  prefix: string
+): TelegramBot.InlineKeyboardButton[][] {
+  // Get purpose codes from the helper function
+  const purposeCodes = getPurposeCodes();
+
+  // Group buttons in rows of 2 for better display
+  const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
+  for (let i = 0; i < purposeCodes.length; i += 2) {
+    const row: TelegramBot.InlineKeyboardButton[] = [];
+    row.push({
+      text: purposeCodes[i].label,
+      callback_data: `${prefix}:purpose:${purposeCodes[i].code}`,
+    });
+
+    if (i + 1 < purposeCodes.length) {
+      row.push({
+        text: purposeCodes[i + 1].label,
+        callback_data: `${prefix}:purpose:${purposeCodes[i + 1].code}`,
+      });
+    }
+    keyboard.push(row);
+  }
+
+  // Add cancel button
+  keyboard.push([{ text: "❌ Cancel", callback_data: `${prefix}:cancel` }]);
+
+  return keyboard;
+}
+
+/**
+ * Create a keyboard with source of funds options
+ * @param prefix The callback data prefix for the action (e.g., "deposit", "withdraw", etc.)
+ * @returns Inline keyboard with source of funds options
+ */
+export function createSourceOfFundsKeyboard(
+  prefix: string
+): TelegramBot.InlineKeyboardButton[][] {
+  const sources = [
+    { code: SourceOfFunds.SALARY, label: "Salary" },
+    { code: SourceOfFunds.SAVINGS, label: "Savings" },
+    { code: SourceOfFunds.INVESTMENT, label: "Investment" },
+    { code: SourceOfFunds.BUSINESS_INCOME, label: "Business Income" },
+    { code: SourceOfFunds.LOAN, label: "Loan" },
+    { code: SourceOfFunds.LOTTERY, label: "Lottery" },
+    { code: SourceOfFunds.OTHERS, label: "Others" },
+  ];
+
+  // Group buttons in rows of 2 for better display
+  const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
+  for (let i = 0; i < sources.length; i += 2) {
+    const row: TelegramBot.InlineKeyboardButton[] = [];
+    row.push({
+      text: sources[i].label,
+      callback_data: `${prefix}:source:${sources[i].code}`,
+    });
+
+    if (i + 1 < sources.length) {
+      row.push({
+        text: sources[i + 1].label,
+        callback_data: `${prefix}:source:${sources[i + 1].code}`,
+      });
+    }
+    keyboard.push(row);
+  }
+
+  // Add cancel button
+  keyboard.push([{ text: "❌ Cancel", callback_data: `${prefix}:cancel` }]);
+
+  return keyboard;
 }
