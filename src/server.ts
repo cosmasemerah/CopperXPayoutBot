@@ -1,5 +1,5 @@
 import http from "http";
-import { PORT } from "./constants";
+import { PORT } from "./utils/constants";
 
 export function startServer() {
   const server = http.createServer((_req, res) => {

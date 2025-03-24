@@ -3,7 +3,7 @@ import {
   AuthResponse,
   KYCResponse,
   OTPRequestResponse,
-} from "../re-types/auth";
+} from "../types/auth";
 import * as api from "../utils/api";
 
 /**

@@ -3,9 +3,8 @@ import {
   TransferResponse,
   TransferHistoryResponse,
   PurposeCode,
-  SourceOfFunds,
-  WalletBalancesResponse,
-} from "../types";
+} from "../types/transfer";
+import { SourceOfFunds, WalletBalancesResponse } from "../types/wallet";
 import * as walletService from "./wallet.service";
 
 /**

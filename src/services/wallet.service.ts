@@ -4,7 +4,7 @@ import {
   SetDefaultWalletRequest,
   GenerateWalletRequest,
   BalanceResponse,
-} from "../types";
+} from "../types/wallet";
 import * as api from "../utils/api";
 
 /**

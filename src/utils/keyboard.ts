@@ -1,7 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
-import { WalletBalance, SourceOfFunds } from "../types";
+import { WalletBalance, SourceOfFunds } from "../types/wallet";
 import { getPurposeCodes } from "./helpers";
-import { getNetworkName } from "./networkConstants";
+import { getNetworkName } from "./constants";
 
 /**
  * Generate a standardized callback data string
@@ -168,89 +168,24 @@ export function createQRCodeResponseKeyboard(): TelegramBot.InlineKeyboardButton
 }
 
 /**
- * Create a keyboard with predefined amount options
- * @param callbackPrefix The prefix for callback data (e.g., "sendemail")
- * @returns An inline keyboard markup with amount options and custom input option
- */
-export function createAmountKeyboard(
-  callbackPrefix: string
-): TelegramBot.InlineKeyboardButton[][] {
-  return [
-    [
-      { text: "$10", callback_data: `${callbackPrefix}:amount:10` },
-      { text: "$50", callback_data: `${callbackPrefix}:amount:50` },
-      { text: "$100", callback_data: `${callbackPrefix}:amount:100` },
-    ],
-    [
-      { text: "$250", callback_data: `${callbackPrefix}:amount:250` },
-      { text: "$500", callback_data: `${callbackPrefix}:amount:500` },
-      { text: "$1000", callback_data: `${callbackPrefix}:amount:1000` },
-    ],
-    [
-      {
-        text: "✏️ Custom Amount",
-        callback_data: `${callbackPrefix}:amount:custom`,
-      },
-    ],
-    [
-      {
-        text: "❌ Cancel",
-        callback_data: `${callbackPrefix}:cancel`,
-      },
-    ],
-  ];
-}
-
-/**
  * Create a keyboard for the main menu
  * @returns An inline keyboard markup for the main menu
  */
 export function createMainMenuKeyboard(): TelegramBot.InlineKeyboardButton[][] {
   return [
     [
-      {
-        text: "💰 Balance",
-        callback_data: createCallbackData("menu", "balance"),
-      },
-      {
-        text: "📜 History",
-        callback_data: createCallbackData("menu", "history"),
-      },
+      { text: "💰 Balance", callback_data: "action:balance" },
+      { text: "💸 Send", callback_data: "action:transfer" },
     ],
     [
-      { text: "📤 Send", callback_data: createCallbackData("menu", "send") },
-      {
-        text: "📥 Deposit",
-        callback_data: createCallbackData("menu", "deposit"),
-      },
+      { text: "👤 Profile", callback_data: "action:profile" },
+      { text: "🔑 KYC", callback_data: "action:kyc" },
     ],
     [
-      {
-        text: "⚙️ Set Default Wallet",
-        callback_data: createCallbackData("menu", "setdefaultwallet"),
-      },
-      {
-        text: "📋 KYC Status",
-        callback_data: createCallbackData("menu", "kyc"),
-      },
+      { text: "⚙️ Settings", callback_data: "action:settings" },
+      { text: "❓ Help", callback_data: "menu:help" },
     ],
-    [
-      {
-        text: "👤 Profile",
-        callback_data: createCallbackData("menu", "profile"),
-      },
-      {
-        text: "🏦 Withdraw",
-        callback_data: createCallbackData("menu", "withdraw"),
-      },
-    ],
-    [
-      {
-        text: "👥 Payees",
-        callback_data: createCallbackData("menu", "payees"),
-      },
-      { text: "❓ Help", callback_data: createCallbackData("menu", "help") },
-    ],
+    [{ text: "🚪 Logout", callback_data: "action:logout" }],
   ];
 }
 
@@ -478,4 +413,69 @@ export function createSourceOfFundsKeyboard(
   keyboard.push([{ text: "❌ Cancel", callback_data: `${prefix}:cancel` }]);
 
   return keyboard;
+}
+
+/**
+ * Create wallet selection keyboard
+ */
+export function createWalletKeyboard(
+  wallets: { id: string; name: string }[]
+): TelegramBot.InlineKeyboardButton[][] {
+  const keyboard: TelegramBot.InlineKeyboardButton[][] = wallets.map(
+    (wallet) => [
+      { text: wallet.name, callback_data: `wallet:select:${wallet.id}` },
+    ]
+  );
+
+  // Add cancel button
+  keyboard.push([{ text: "↩️ Cancel", callback_data: "menu:main" }]);
+
+  return keyboard;
+}
+
+/**
+ * Create transfer method keyboard
+ */
+export function createTransferMethodKeyboard(): TelegramBot.InlineKeyboardButton[][] {
+  return [
+    [{ text: "📧 Email", callback_data: "transfer:method:email" }],
+    [{ text: "📞 Phone", callback_data: "transfer:method:phone" }],
+    [{ text: "📋 Wallet Address", callback_data: "transfer:method:address" }],
+    [{ text: "↩️ Cancel", callback_data: "menu:main" }],
+  ];
+}
+
+/**
+ * Create amount selection keyboard
+ */
+export function createAmountKeyboard(): TelegramBot.InlineKeyboardButton[][] {
+  return [
+    [
+      { text: "$5", callback_data: "amount:5" },
+      { text: "$10", callback_data: "amount:10" },
+      { text: "$25", callback_data: "amount:25" },
+    ],
+    [
+      { text: "$50", callback_data: "amount:50" },
+      { text: "$100", callback_data: "amount:100" },
+      { text: "$200", callback_data: "amount:200" },
+    ],
+    [{ text: "Custom Amount", callback_data: "amount:custom" }],
+    [{ text: "↩️ Cancel", callback_data: "transfer:cancel" }],
+  ];
+}
+
+/**
+ * Create yes/no confirmation keyboard
+ */
+export function createConfirmationKeyboard(
+  confirmAction: string,
+  cancelAction: string
+): TelegramBot.InlineKeyboardButton[][] {
+  return [
+    [
+      { text: "✅ Confirm", callback_data: confirmAction },
+      { text: "❌ Cancel", callback_data: cancelAction },
+    ],
+  ];
 }
