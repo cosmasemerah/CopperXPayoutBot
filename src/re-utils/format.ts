@@ -58,7 +58,7 @@ export function formatDate(date: Date): string {
 }
 
 // Import the getNetworkName function
-import { getNetworkName } from "./networkConstants";
+import { getNetworkName } from "../utils/networkConstants";
 
 /**
  * Create a Markdown formatted message for wallet balances

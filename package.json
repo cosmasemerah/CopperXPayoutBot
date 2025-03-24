@@ -5,7 +5,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "ts-node src/index.ts",
+    "dev": "ts-node src/re-index.ts",
     "watch": "tsc -w",
     "dev:watch": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
     "clean": "rimraf dist",

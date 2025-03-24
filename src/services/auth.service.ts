@@ -1,4 +1,9 @@
-import { User, AuthResponse, KYCResponse } from "../types";
+import {
+  User,
+  AuthResponse,
+  KYCResponse,
+  OTPRequestResponse,
+} from "../re-types/auth";
 import * as api from "../utils/api";
 
 /**
@@ -8,11 +13,10 @@ import * as api from "../utils/api";
  */
 export async function requestEmailOTP(
   email: string
-): Promise<{ email: string; sid: string }> {
-  return await api.post<{ email: string; sid: string }>(
-    "/api/auth/email-otp/request",
-    { email }
-  );
+): Promise<OTPRequestResponse> {
+  return await api.post<OTPRequestResponse>("/api/auth/email-otp/request", {
+    email,
+  });
 }
 
 /**

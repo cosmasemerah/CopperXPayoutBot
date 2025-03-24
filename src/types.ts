@@ -18,6 +18,11 @@ export enum CustomerProfileType {
   INDIVIDUAL = "individual",
   BUSINESS = "business",
 }
+export interface ApiError {
+  statusCode: number;
+  error: string;
+  message: string;
+}
 
 // KYC status types
 export enum KYCStatus {
@@ -471,4 +476,29 @@ export interface CreatePayeeRequest {
     bankBeneficiaryAddress?: string;
     swiftCode?: string;
   };
+}
+
+// Batch Transfer Request and Response types
+export interface BatchTransferRequest {
+  requestId: string;
+  request: {
+    email: string;
+    amount: string;
+    purposeCode: string;
+    currency: string;
+  };
+}
+
+export interface BatchTransferResponse {
+  responses: Array<{
+    requestId: string;
+    request: {
+      email: string;
+      amount: string;
+      purposeCode: string;
+      currency: string;
+    };
+    response?: TransferResponse;
+    error?: ApiError;
+  }>;
 }
