@@ -15,6 +15,7 @@ import {
 } from "../../utils/keyboard";
 import { getModuleLogger } from "../../utils/logger";
 import { PurposeCode } from "../../types";
+import { requireAuth } from "../../core/middleware";
 
 // Create module logger
 const logger = getModuleLogger("wallet-transfer-command");
@@ -24,10 +25,9 @@ const logger = getModuleLogger("wallet-transfer-command");
  */
 interface WalletTransferSessionState extends SessionState {
   currentAction: "sendwallet";
-  step: "address" | "network" | "amount" | "purpose" | "confirm";
+  step: "address" | "amount" | "purpose" | "confirm";
   walletAddress?: string;
   amount?: number;
-  network?: string;
   purposeCode?: string;
 }
 
@@ -75,75 +75,75 @@ export class WalletTransferCommand extends BaseTransferCommand {
   }
 
   /**
-   * Process callback data
+   * Handle callback queries
    */
-  protected async processCallback(
+  async handleCallback(
     bot: TelegramBot,
-    query: TelegramBot.CallbackQuery,
-    session: ExtendedSession
+    query: TelegramBot.CallbackQuery
   ): Promise<void> {
     if (!query.message || !query.data) return;
 
     const chatId = query.message.chat.id;
-    const callbackData = query.data;
+    const data = query.data;
 
-    // Handle wallet transfer method selection
-    if (callbackData === "transfer:method:wallet") {
-      await this.startTransferFlow(bot, chatId, session);
-      return;
-    }
+    // Answer callback query to remove loading indicator
+    bot.answerCallbackQuery(query.id);
 
-    // Handle network selection
-    if (callbackData.startsWith("network:")) {
-      const network = callbackData.split(":")[1];
-      await this.processNetworkSelection(bot, chatId, network);
-      return;
-    }
+    // Handle amount selection
+    if (data.startsWith("amount:")) {
+      requireAuth(bot, chatId, async () => {
+        const amountPart = data.split(":")[1];
 
-    // Handle amount selection from keyboard
-    if (callbackData.startsWith("amount:")) {
-      const amountPart = callbackData.split(":")[1];
+        if (amountPart === "custom") {
+          bot.sendMessage(
+            chatId,
+            "💰 Please enter the amount you want to send:",
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "❌ Cancel", callback_data: "transfer:cancel" }],
+                ],
+              },
+            }
+          );
+          return;
+        }
 
-      if (amountPart === "custom") {
-        bot.sendMessage(
-          chatId,
-          "💰 Please enter the amount you want to send:",
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [{ text: "❌ Cancel", callback_data: "transfer:cancel" }],
-              ],
-            },
-          }
-        );
-        return;
-      }
-
-      const amount = parseFloat(amountPart);
-      if (!isNaN(amount)) {
-        await this.processAmountSelection(bot, chatId, amount);
-      }
-      return;
-    }
-
-    // Handle purpose selection
-    if (callbackData.startsWith("purpose:")) {
-      const purposeCode = callbackData.split(":")[1];
-      await this.processPurposeSelection(bot, chatId, purposeCode);
-      return;
-    }
-
-    // Handle transfer confirmation
-    if (callbackData === "transfer:confirm") {
-      await this.processTransferConfirmation(bot, chatId, session);
+        const amount = parseFloat(amountPart);
+        if (!isNaN(amount)) {
+          await this.processAmountSelection(bot, chatId, amount);
+        }
+      });
       return;
     }
 
     // Handle transfer cancellation
-    if (callbackData === "transfer:cancel") {
-      await this.sendCancelMessage(bot, chatId);
+    if (data === "transfer:cancel") {
+      requireAuth(bot, chatId, async () => {
+        await this.sendCancelMessage(bot, chatId);
+      });
       return;
     }
+
+    // Handle purpose selection
+    if (data.startsWith("purpose:")) {
+      requireAuth(bot, chatId, async () => {
+        const purposeCode = data.split(":")[1];
+        await this.processPurposeSelection(bot, chatId, purposeCode);
+      });
+      return;
+    }
+
+    // Handle transfer confirmation
+    if (data === "transfer:confirm") {
+      requireAuth(bot, chatId, async (session: ExtendedSession) => {
+        await this.processTransferConfirmation(bot, chatId, session);
+      });
+      return;
+    }
+
+    // If none of the above, let parent class handle it
+    await super.handleCallback(bot, query);
   }
 
   /**
@@ -193,85 +193,33 @@ export class WalletTransferCommand extends BaseTransferCommand {
     }
 
     try {
-      // Update state with wallet address
+      // Update state with wallet address and go directly to amount step
       this.updateSessionData<WalletTransferSessionState>(chatId, {
+        currentAction: "sendwallet",
         walletAddress,
-        step: "network",
+        step: "amount", // Changed from "network" to "amount"
       });
 
-      // Get available networks
-      const networks = ["ethereum", "polygon", "base", "arbitrum"];
-
-      // Create network selection keyboard
-      const networkKeyboard: TelegramBot.InlineKeyboardButton[][] = [];
-
-      for (const network of networks) {
-        networkKeyboard.push([
-          {
-            text: network.charAt(0).toUpperCase() + network.slice(1),
-            callback_data: `network:${network}`,
-          },
-        ]);
-      }
-
-      // Add cancel button
-      networkKeyboard.push([
-        { text: "❌ Cancel", callback_data: "transfer:cancel" },
-      ]);
-
-      // Prompt for network selection
+      // Prompt for amount directly instead of network selection
       bot.sendMessage(
         chatId,
         `🔑 *Send to Wallet*\n\n` +
           `Wallet Address: ${formatAddress(walletAddress)}\n\n` +
-          `Please select the network:`,
+          `Please select or enter an amount in USDC:`,
         {
           parse_mode: "Markdown",
           reply_markup: {
-            inline_keyboard: networkKeyboard,
+            inline_keyboard: createAmountKeyboard(),
           },
         }
       );
     } catch (error: any) {
-      logger.error(`Network fetch error:`, error);
+      logger.error(`Transfer setup error:`, error);
       handleApiErrorResponse(bot, chatId, error, "transfer:method:wallet");
 
       // Reset state
       this.clearSessionData(chatId);
     }
-  }
-
-  /**
-   * Process network selection
-   */
-  private async processNetworkSelection(
-    bot: TelegramBot,
-    chatId: number,
-    network: string
-  ): Promise<void> {
-    // Get current state
-    const state = this.getSessionData<WalletTransferSessionState>(chatId);
-    if (!state || !state.walletAddress) return;
-
-    // Update state with network
-    this.updateSessionData<WalletTransferSessionState>(chatId, {
-      network,
-      step: "amount",
-    });
-
-    // Prompt for amount
-    bot.sendMessage(
-      chatId,
-      `🔑 *Send to Wallet on ${network}*\n\n` +
-        `Address: ${formatAddress(state.walletAddress)}\n\n` +
-        `Please select or enter an amount in USDC:`,
-      {
-        parse_mode: "Markdown",
-        reply_markup: {
-          inline_keyboard: createAmountKeyboard(),
-        },
-      }
-    );
   }
 
   /**
@@ -313,7 +261,7 @@ export class WalletTransferCommand extends BaseTransferCommand {
   ): Promise<void> {
     // Get current state
     const state = this.getSessionData<WalletTransferSessionState>(chatId);
-    if (!state || !state.walletAddress || !state.network) return;
+    if (!state || !state.walletAddress) return;
 
     // For API calls, get the session
     const session = SessionService.getSession(chatId);
@@ -321,6 +269,7 @@ export class WalletTransferCommand extends BaseTransferCommand {
 
     // Update state with amount and move to purpose selection
     this.updateSessionData<WalletTransferSessionState>(chatId, {
+      currentAction: "sendwallet",
       amount,
       step: "purpose",
     });
@@ -330,7 +279,6 @@ export class WalletTransferCommand extends BaseTransferCommand {
       chatId,
       `📝 *Transfer Details*\n\n` +
         `Address: ${formatAddress(state.walletAddress)}\n` +
-        `Network: ${state.network}\n` +
         `Amount: ${formatCurrency(amount, "USDC")}\n\n` +
         `Please select the purpose of this transfer:`,
       {
@@ -352,11 +300,11 @@ export class WalletTransferCommand extends BaseTransferCommand {
   ): Promise<void> {
     // Get current state
     const state = this.getSessionData<WalletTransferSessionState>(chatId);
-    if (!state || !state.walletAddress || !state.amount || !state.network)
-      return;
+    if (!state || !state.walletAddress || !state.amount) return;
 
     // Update state with purpose code
     this.updateSessionData<WalletTransferSessionState>(chatId, {
+      currentAction: "sendwallet",
       purposeCode,
       step: "confirm",
     });
@@ -374,8 +322,7 @@ export class WalletTransferCommand extends BaseTransferCommand {
   ): Promise<void> {
     // Get current state
     const state = this.getSessionData<WalletTransferSessionState>(chatId);
-    if (!state || !state.walletAddress || !state.amount || !state.network)
-      return;
+    if (!state || !state.walletAddress || !state.amount) return;
 
     try {
       // Get the session for API calls
@@ -417,7 +364,6 @@ export class WalletTransferCommand extends BaseTransferCommand {
         `💰 *Transfer Confirmation*\n\n` +
         `From: Your Copperx Account\n` +
         `To: ${formatAddress(state.walletAddress)}\n` +
-        `Network: ${state.network}\n` +
         `Amount: ${formatCurrency(state.amount, "USDC")}\n` +
         `Purpose: ${purposeDisplay}`;
 
@@ -467,8 +413,7 @@ export class WalletTransferCommand extends BaseTransferCommand {
   ): Promise<void> {
     // Get current state
     const state = this.getSessionData<WalletTransferSessionState>(chatId);
-    if (!state || !state.walletAddress || !state.amount || !state.network)
-      return;
+    if (!state || !state.walletAddress || !state.amount) return;
 
     try {
       // Send loading message
@@ -478,13 +423,12 @@ export class WalletTransferCommand extends BaseTransferCommand {
         { parse_mode: "Markdown" }
       );
 
-      // Execute transfer with purpose code
+      // Execute transfer with purpose code - no need to specify network since it's handled by the API
       const result = await transferService.sendToWallet(
         session.token,
         state.walletAddress,
         state.amount.toString(),
         "USDC",
-        state.network,
         state.purposeCode || PurposeCode.SELF // Use purpose code if set, default to 'self'
       );
 
@@ -501,7 +445,7 @@ export class WalletTransferCommand extends BaseTransferCommand {
         `✅ *Transfer Successful!*\n\n` +
         `You've sent ${formatCurrency(state.amount, "USDC")} to ${formatAddress(
           state.walletAddress
-        )} on ${state.network}\n` +
+        )}\n` +
         `Purpose: ${purposeDisplay}\n` +
         `Reference ID: ${result.id}`;
 
@@ -530,5 +474,25 @@ export class WalletTransferCommand extends BaseTransferCommand {
   private isValidWalletAddress(address: string): boolean {
     // Basic validation for Ethereum-style addresses
     return /^0x[a-fA-F0-9]{40}$/.test(address);
+  }
+
+  /**
+   * Process callback data (needed to implement BaseTransferCommand)
+   */
+  protected async processCallback(
+    bot: TelegramBot,
+    query: TelegramBot.CallbackQuery,
+    session: ExtendedSession
+  ): Promise<void> {
+    if (!query.message || !query.data) return;
+
+    const chatId = query.message.chat.id;
+    const callbackData = query.data;
+
+    // Handle wallet transfer method selection
+    if (callbackData === "transfer:method:wallet") {
+      await this.startTransferFlow(bot, chatId, session);
+      return;
+    }
   }
 }

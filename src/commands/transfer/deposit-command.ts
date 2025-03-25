@@ -7,6 +7,7 @@ import { sendWalletQRCode } from "../../utils/message-templates";
 import { Wallet } from "../../types/wallet";
 import { BaseTransferCommand } from "./base-transfer-command";
 import { ExtendedSession, SessionState } from "../../core/session.service";
+import { requireAuth } from "../../core/middleware";
 
 // Create module logger
 const logger = getModuleLogger("deposit-command");
@@ -64,17 +65,23 @@ export class DepositCommand extends BaseTransferCommand {
         step: "wallet_selection",
       });
 
+      // Create wallet list in the message for better visibility
+      let message = "💰 *Deposit to Your Wallet*\n\n";
+      message += "Please select which wallet you would like to deposit to:\n\n";
+
+      wallets.forEach((wallet) => {
+        const isDefault = wallet.isDefault ? " (Default)" : "";
+        const networkName = getNetworkName(wallet.network, true);
+        message += `- *${networkName}${isDefault}*\n  \`${wallet.walletAddress}\`\n\n`;
+      });
+
       // Show wallet selection options
-      bot.sendMessage(
-        chatId,
-        "💰 *Deposit to Your Wallet*\n\nPlease select which wallet you would like to deposit to:",
-        {
-          parse_mode: "Markdown",
-          reply_markup: {
-            inline_keyboard: this.createDepositWalletSelectionKeyboard(wallets),
-          },
-        }
-      );
+      bot.sendMessage(chatId, message, {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: this.createDepositWalletSelectionKeyboard(wallets),
+        },
+      });
     } catch (error) {
       logger.error("Wallet fetch error:", { error });
       handleApiErrorResponse(bot, chatId, error as Error, "action:deposit");
@@ -194,7 +201,7 @@ export class DepositCommand extends BaseTransferCommand {
         reply_markup: {
           inline_keyboard: [
             [{ text: "📥 Try Again", callback_data: "menu:deposit" }],
-            [{ text: "« Back to Menu", callback_data: "return:menu" }],
+            [{ text: "« Back to Menu", callback_data: "menu:main" }],
           ],
         },
       });
@@ -212,7 +219,7 @@ export class DepositCommand extends BaseTransferCommand {
     // Add a button for each wallet
     wallets.forEach((wallet) => {
       const isDefault = wallet.isDefault ? " (Default)" : "";
-      const networkName = getNetworkName(wallet.network);
+      const networkName = getNetworkName(wallet.network, true);
 
       keyboard.push([
         {
@@ -238,5 +245,33 @@ export class DepositCommand extends BaseTransferCommand {
       [{ text: "📱 Get QR Code", callback_data: `deposit:qrcode:${walletId}` }],
       [{ text: "❌ Cancel", callback_data: "deposit:cancel" }],
     ];
+  }
+
+  /**
+   * Handle callback queries
+   * Override to handle menu:deposit callback
+   */
+  async handleCallback(
+    bot: TelegramBot,
+    query: TelegramBot.CallbackQuery
+  ): Promise<void> {
+    if (!query.message || !query.data) return;
+
+    const chatId = query.message.chat.id;
+    const callbackData = query.data;
+
+    // Answer callback query to remove loading indicator
+    bot.answerCallbackQuery(query.id);
+
+    // Handle menu:deposit callback explicitly
+    if (callbackData === "menu:deposit") {
+      requireAuth(bot, chatId, async (session) => {
+        await this.startTransferFlow(bot, chatId, session);
+      });
+      return;
+    }
+
+    // Let the parent class handle other callbacks
+    await super.handleCallback(bot, query);
   }
 }

@@ -62,7 +62,6 @@ export async function sendToEmail(
  * @param walletAddress The recipient's wallet address
  * @param amount The amount to send
  * @param currency The currency code (default: "USDC")
- * @param network The network to use
  * @param purposeCode The purpose code (default: "self")
  * @returns Promise with the response
  */
@@ -71,7 +70,6 @@ export async function sendToWallet(
   walletAddress: string,
   amount: string,
   currency: string = "USDC",
-  network: string,
   purposeCode: string = PurposeCode.SELF
 ): Promise<TransferResponse> {
   // Validate the amount before sending
@@ -92,12 +90,11 @@ export async function sendToWallet(
   const scaledAmount = (parsedAmount * 100000000).toFixed(0);
 
   return await api.post(
-    "/api/transfers/wallet-withdraw",
+    "/api/transfers/send",
     {
       walletAddress,
       amount: scaledAmount, // Scaled amount as string
       currency,
-      network,
       purposeCode,
     },
     token

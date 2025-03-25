@@ -1,4 +1,8 @@
 import TelegramBot from "node-telegram-bot-api";
+import { getModuleLogger } from "../utils/logger";
+
+// Create module logger
+const logger = getModuleLogger("command-registry");
 
 /**
  * Bot command interface
@@ -55,7 +59,14 @@ export class CommandRegistry {
 
     // If no pattern is provided, create default pattern
     if (!command.pattern) {
-      command.pattern = new RegExp(`^\/${command.name}(?:\\s+(.+))?$`);
+      // Create a pattern that matches both the command name and with the bot name
+      command.pattern = new RegExp(
+        `^\/${command.name}(?:@\\w+)?(?:\\s+(.+))?$`,
+        "i"
+      );
+      logger.debug(
+        `Created pattern for command /${command.name}: ${command.pattern}`
+      );
     }
   }
 
@@ -91,16 +102,59 @@ export class CommandRegistry {
    * @returns The command that handles this callback or undefined
    */
   findCallbackHandler(callbackData: string): BotCommand | undefined {
-    // First try exact match
+    logger.debug(`Finding handler for callback data: ${callbackData}`);
+
+    // First try exact match for entire callback data
     for (const [prefix, command] of this.callbackHandlers.entries()) {
       if (callbackData === prefix) {
+        logger.debug(
+          `Found exact match handler: ${command.name} for prefix: ${prefix}`
+        );
         return command;
       }
     }
 
     // Then try prefix match
+    // Get prefix (everything before the first colon)
     const prefix = callbackData.split(":")[0];
-    return this.callbackHandlers.get(prefix);
+    if (prefix && this.callbackHandlers.has(prefix)) {
+      logger.debug(
+        `Found prefix match handler: ${
+          this.callbackHandlers.get(prefix)?.name
+        } for prefix: ${prefix}`
+      );
+      return this.callbackHandlers.get(prefix);
+    }
+
+    // Try matching domain:action format if there are at least 2 parts
+    const parts = callbackData.split(":");
+    if (parts.length >= 2) {
+      const domainAction = `${parts[0]}:${parts[1]}`;
+      if (this.callbackHandlers.has(domainAction)) {
+        logger.debug(
+          `Found domain:action match handler: ${
+            this.callbackHandlers.get(domainAction)?.name
+          } for: ${domainAction}`
+        );
+        return this.callbackHandlers.get(domainAction);
+      }
+    }
+
+    // No handler found
+    logger.warn(`No handler found for callback data: ${callbackData}`);
+    return undefined;
+  }
+
+  /**
+   * Log all registered callback handlers for debugging purposes
+   */
+  logRegisteredHandlers(): void {
+    logger.info(
+      `Registered callback handlers (${this.callbackHandlers.size}):`
+    );
+    for (const [prefix, command] of this.callbackHandlers.entries()) {
+      logger.info(`- ${prefix} -> ${command.name}`);
+    }
   }
 }
 

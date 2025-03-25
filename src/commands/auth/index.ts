@@ -23,13 +23,13 @@ export function registerAuthCommands(bot: TelegramBot): void {
   commandRegistry.registerCommand(kycCommand);
 
   // Register callback handlers
-  commandRegistry.registerCallbackHandler("action", loginCommand);
+  commandRegistry.registerCallbackHandler("action:login", loginCommand);
   commandRegistry.registerCallbackHandler("login", loginCommand);
-  commandRegistry.registerCallbackHandler("action", logoutCommand);
-  commandRegistry.registerCallbackHandler("action", profileCommand);
-  commandRegistry.registerCallbackHandler("menu", profileCommand);
-  commandRegistry.registerCallbackHandler("action", kycCommand);
-  commandRegistry.registerCallbackHandler("menu", kycCommand);
+  commandRegistry.registerCallbackHandler("action:logout", logoutCommand);
+  commandRegistry.registerCallbackHandler("action:profile", profileCommand);
+  commandRegistry.registerCallbackHandler("menu:profile", profileCommand);
+  commandRegistry.registerCallbackHandler("action:kyc", kycCommand);
+  commandRegistry.registerCallbackHandler("menu:kyc", kycCommand);
 
   // Register message handlers for multi-step flows
   registerLoginMessageHandlers(bot);

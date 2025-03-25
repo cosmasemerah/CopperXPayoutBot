@@ -34,8 +34,12 @@ export function registerAllCommands(bot: TelegramBot): void {
 
   // Register core command callbacks
   commandRegistry.registerCallbackHandler("menu", menuCommand);
+  commandRegistry.registerCallbackHandler("menu:main", menuCommand);
   commandRegistry.registerCallbackHandler("menu:help", helpCommand);
-  commandRegistry.registerCallbackHandler("action", notificationCommand);
+  commandRegistry.registerCallbackHandler(
+    "action:notifications",
+    notificationCommand
+  );
 
   // Register domain commands
   registerAuthCommands(bot);
@@ -60,5 +64,18 @@ export function registerAllCommands(bot: TelegramBot): void {
     )
     .catch((err) => logger.error("Failed to update bot command list", err));
 
-  logger.info("All commands registered successfully");
+  // Log all registered commands and callbacks for verification
+  const registeredCommands = commandRegistry.getCommands();
+  logger.info(`Registered ${registeredCommands.length} commands:`);
+  registeredCommands.forEach((cmd) => {
+    logger.info(`- /${cmd.name}: ${cmd.description}`);
+  });
+
+  // Log all registered callback handlers
+  commandRegistry.logRegisteredHandlers();
+
+  // Debug message to help trace execution
+  logger.info(
+    "All commands registered successfully. When executing from src/commands/index.ts"
+  );
 }

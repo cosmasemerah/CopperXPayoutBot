@@ -1,6 +1,6 @@
 import { startBot } from "./core/bot";
 import { startServer } from "./server";
-import { registerAllCommands } from "./core/commands";
+import { registerAllCommands } from "./commands";
 import { getModuleLogger } from "./utils/logger";
 
 // Create module logger

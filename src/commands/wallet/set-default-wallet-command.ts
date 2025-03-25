@@ -5,6 +5,7 @@ import * as walletService from "../../services/wallet.service";
 import { handleApiErrorResponse } from "../../utils/error-handler";
 import { getModuleLogger } from "../../utils/logger";
 import { Wallet } from "../../types/wallet";
+import { getNetworkName } from "../../utils/constants";
 
 // Create module logger
 const logger = getModuleLogger("set-default-wallet-command");
@@ -56,12 +57,15 @@ export class SetDefaultWalletCommand implements BotCommand {
 
         wallets.forEach((wallet: Wallet) => {
           const isDefault = wallet.isDefault ? " (Current Default)" : "";
-          // Use network as the display name since name doesn't exist
-          const walletName = `${wallet.network}${isDefault}`;
+          // Use network name from the constants utility instead of just the ID
+          const networkName = getNetworkName(wallet.network, true);
+
+          // Add wallet address in the description for clarity
+          message += `- *${networkName}${isDefault}*\n  \`${wallet.walletAddress}\`\n\n`;
 
           keyboard.push([
             {
-              text: walletName,
+              text: networkName + isDefault,
               callback_data: `setdefault:wallet:${wallet.id}`,
             },
           ]);
@@ -110,7 +114,8 @@ export class SetDefaultWalletCommand implements BotCommand {
 
     if (
       callbackData === "action:setdefault" ||
-      callbackData === "wallet:setdefault"
+      callbackData === "wallet:setdefault" ||
+      callbackData === "action:settings"
     ) {
       this.execute(bot, query.message as TelegramBot.Message);
       return;

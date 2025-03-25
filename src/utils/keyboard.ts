@@ -135,7 +135,7 @@ export function createDepositActionsKeyboard(
       },
       {
         text: "« Back to Menu",
-        callback_data: "return:menu",
+        callback_data: "menu:main",
       },
     ],
   ];
@@ -161,7 +161,7 @@ export function createQRCodeResponseKeyboard(): TelegramBot.InlineKeyboardButton
     [
       {
         text: "« Back to Menu",
-        callback_data: "return:menu",
+        callback_data: "menu:main",
       },
     ],
   ];
@@ -178,14 +178,21 @@ export function createMainMenuKeyboard(): TelegramBot.InlineKeyboardButton[][] {
       { text: "💸 Send", callback_data: "action:transfer" },
     ],
     [
+      { text: "📥 Deposit", callback_data: "menu:deposit" },
+      { text: "📜 History", callback_data: "menu:history" },
+    ],
+    [
       { text: "👤 Profile", callback_data: "action:profile" },
       { text: "🔑 KYC", callback_data: "action:kyc" },
     ],
     [
+      { text: "📋 Payees", callback_data: "menu:listpayees" },
       { text: "⚙️ Settings", callback_data: "action:settings" },
-      { text: "❓ Help", callback_data: "menu:help" },
     ],
-    [{ text: "🚪 Logout", callback_data: "action:logout" }],
+    [
+      { text: "❓ Help", callback_data: "menu:help" },
+      { text: "🚪 Logout", callback_data: "action:logout" },
+    ],
   ];
 }
 
@@ -201,7 +208,7 @@ export function createSendOptionsKeyboard(): TelegramBot.InlineKeyboardButton[][
     ],
     [
       { text: "🏦 Withdraw to Bank", callback_data: "send:bank" },
-      { text: "↩️ Back to Menu", callback_data: "send:back" },
+      { text: "↩️ Back to Menu", callback_data: "menu:main" },
     ],
   ];
 }
@@ -215,7 +222,7 @@ export function createBackToMenuKeyboard(): TelegramBot.InlineKeyboardButton[][]
     [
       {
         text: "« Back to Menu",
-        callback_data: createCallbackData("return", "menu"),
+        callback_data: "menu:main",
       },
     ],
   ];
@@ -312,7 +319,7 @@ export function createActionKeyboard(
   keyboard.push([
     {
       text: "« Back to Menu",
-      callback_data: createCallbackData("return", "menu"),
+      callback_data: "menu:main",
     },
   ]);
 
@@ -332,7 +339,7 @@ export function createErrorActionKeyboard(
       { text: "🔄 Try Again", callback_data: retryCallback },
       {
         text: "« Back to Menu",
-        callback_data: createCallbackData("return", "menu"),
+        callback_data: "menu:main",
       },
     ],
   ];

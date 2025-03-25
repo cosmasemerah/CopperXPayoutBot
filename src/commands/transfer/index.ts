@@ -33,12 +33,20 @@ export function registerTransferCommands(_bot: TelegramBot): void {
 
   // Register commands in registry
   commandRegistry.registerCommand(transferMenuCommand);
+  commandRegistry.registerCommand(emailTransferCommand);
+  commandRegistry.registerCommand(walletTransferCommand);
+  commandRegistry.registerCommand(bankWithdrawalCommand);
+  commandRegistry.registerCommand(batchTransferCommand);
   commandRegistry.registerCommand(depositCommand);
   commandRegistry.registerCommand(historyCommand);
   commandRegistry.registerCommand(payeeCommand);
 
   // Register callback handlers
-  commandRegistry.registerCallbackHandler("wallet", transferMenuCommand);
+  commandRegistry.registerCallbackHandler("transfer:menu", transferMenuCommand);
+  commandRegistry.registerCallbackHandler(
+    "action:transfer",
+    transferMenuCommand
+  );
   commandRegistry.registerCallbackHandler(
     "transfer:method:email",
     emailTransferCommand
@@ -56,6 +64,34 @@ export function registerTransferCommands(_bot: TelegramBot): void {
     batchTransferCommand
   );
 
+  // Register callback handlers for email payee selection
+  // This handles payee email selection during email transfers
+  commandRegistry.registerCallbackHandler("payee:email", emailTransferCommand);
+
+  // Register callback handlers for transfer-related actions
+  commandRegistry.registerCallbackHandler("transfer", emailTransferCommand);
+  commandRegistry.registerCallbackHandler("amount", emailTransferCommand);
+  commandRegistry.registerCallbackHandler("purpose", emailTransferCommand);
+  commandRegistry.registerCallbackHandler("network", walletTransferCommand);
+
+  // Add more specific handlers for transfer actions
+  commandRegistry.registerCallbackHandler(
+    "transfer:amount",
+    emailTransferCommand
+  );
+  commandRegistry.registerCallbackHandler(
+    "transfer:purpose",
+    emailTransferCommand
+  );
+  commandRegistry.registerCallbackHandler(
+    "transfer:cancel",
+    emailTransferCommand
+  );
+  commandRegistry.registerCallbackHandler(
+    "transfer:confirm",
+    emailTransferCommand
+  );
+
   // Register new command callback handlers
   commandRegistry.registerCallbackHandler("deposit", depositCommand);
   commandRegistry.registerCallbackHandler("menu:deposit", depositCommand);
@@ -63,7 +99,12 @@ export function registerTransferCommands(_bot: TelegramBot): void {
   commandRegistry.registerCallbackHandler("menu:history", historyCommand);
 
   // Register payee command callback handlers
-  commandRegistry.registerCallbackHandler("payee", payeeCommand);
+  // These handle actions related to managing payees, not selecting them during transfers
+  commandRegistry.registerCallbackHandler("payee:cancel", payeeCommand);
+  commandRegistry.registerCallbackHandler("payee:yes", payeeCommand);
+  commandRegistry.registerCallbackHandler("payee:no", payeeCommand);
+  commandRegistry.registerCallbackHandler("payee:remove", payeeCommand);
+  commandRegistry.registerCallbackHandler("payee:removecancel", payeeCommand);
   commandRegistry.registerCallbackHandler("menu:addpayee", payeeCommand);
   commandRegistry.registerCallbackHandler("menu:payees", payeeCommand);
   commandRegistry.registerCallbackHandler("menu:listpayees", payeeCommand);

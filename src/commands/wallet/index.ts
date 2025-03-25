@@ -17,9 +17,13 @@ export function registerWalletCommands(_bot: TelegramBot): void {
   commandRegistry.registerCommand(setDefaultWalletCommand);
 
   // Register callback handlers
-  commandRegistry.registerCallbackHandler("menu", balanceCommand);
+  commandRegistry.registerCallbackHandler("menu:balance", balanceCommand);
+  commandRegistry.registerCallbackHandler("action:balance", balanceCommand);
+  commandRegistry.registerCallbackHandler(
+    "action:settings",
+    setDefaultWalletCommand
+  );
   commandRegistry.registerCallbackHandler("wallet", setDefaultWalletCommand);
-  commandRegistry.registerCallbackHandler("action", balanceCommand); // For action:balance callbacks
   commandRegistry.registerCallbackHandler(
     "setdefault",
     setDefaultWalletCommand

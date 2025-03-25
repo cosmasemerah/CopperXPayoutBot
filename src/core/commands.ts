@@ -35,7 +35,10 @@ export function registerAllCommands(bot: TelegramBot): void {
 
   // Register core command callbacks
   commandRegistry.registerCallbackHandler("menu", menuCommand);
-  commandRegistry.registerCallbackHandler("action", notificationCommand);
+  commandRegistry.registerCallbackHandler(
+    "action:notifications",
+    notificationCommand
+  );
 
   // Register domain-specific commands
   registerAuthCommands(bot);
@@ -70,27 +73,5 @@ export function registerAllCommands(bot: TelegramBot): void {
     }
   });
 
-  // Set up callback query handler
-  bot.on("callback_query", (query) => {
-    if (!query.data) return;
-
-    const callbackData = query.data;
-    const command = commandRegistry.findCallbackHandler(callbackData);
-
-    if (command) {
-      logger.info(
-        `Handling callback: ${callbackData} from user ${query.from.id}`
-      );
-      command.handleCallback(bot, query).catch((err) => {
-        logger.error(`Error handling callback ${callbackData}:`, err);
-      });
-    } else {
-      logger.warn(`No handler found for callback: ${callbackData}`);
-      bot.answerCallbackQuery(query.id, {
-        text: "This action is not available",
-      });
-    }
-  });
-
-  logger.info("Command registration complete");
+  logger.info("Command registration complete from src/core/commands.ts");
 }

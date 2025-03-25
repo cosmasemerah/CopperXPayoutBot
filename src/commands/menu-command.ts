@@ -67,8 +67,12 @@ export class MenuCommand implements BotCommand {
     // Answer callback query to remove loading indicator
     bot.answerCallbackQuery(query.id);
 
-    // Handle main menu callback
-    if (callbackData === "menu:main") {
+    // Handle main menu callback - handle all formats for backwards compatibility
+    if (
+      callbackData === "menu:main" ||
+      callbackData === "menu" ||
+      callbackData === "return:menu"
+    ) {
       await this.sendMainMenu(bot, chatId);
     }
   }

@@ -127,9 +127,15 @@ export abstract class BaseTransferCommand implements BotCommand {
     newData: Partial<T>
   ): void {
     const sessionState = SessionService.getSessionState(chatId) || { data: {} };
+
+    // Make sure we preserve the current action by default
+    if (!newData.currentAction && sessionState.currentAction) {
+      newData.currentAction = sessionState.currentAction;
+    }
+
     const updatedData = { ...(sessionState.data as T), ...newData };
     SessionService.updateSessionState(chatId, {
-      ...sessionState,
+      currentAction: newData.currentAction || sessionState.currentAction,
       data: updatedData,
     });
   }

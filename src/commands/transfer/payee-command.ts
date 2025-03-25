@@ -77,6 +77,15 @@ export class PayeeCommand implements BotCommand {
 
     // Use requireAuth middleware
     if (callbackData.startsWith("payee:")) {
+      // If this is an email selection callback for transfers, ignore it
+      // These should be handled by EmailTransferCommand
+      if (callbackData.startsWith("payee:email:")) {
+        logger.debug(
+          `Ignoring payee:email callback in PayeeCommand: ${callbackData}`
+        );
+        return;
+      }
+
       requireAuth(bot, chatId, (session) => {
         const parts = callbackData.split(":");
         const action = parts[1];

@@ -12,6 +12,7 @@ import {
   createPurposeCodeKeyboard,
 } from "../../utils/keyboard";
 import { getModuleLogger } from "../../utils/logger";
+import { requireAuth } from "../../core/middleware";
 
 /**
  * Interface for email transfer session state
@@ -72,7 +73,7 @@ export class EmailTransferCommand extends BaseTransferCommand {
           const displayName1 = payee1.nickName || payee1.email;
           row.push({
             text: displayName1,
-            callback_data: `payee:${payee1.email}`,
+            callback_data: `payee:email:${payee1.email}`,
           });
 
           // Add second button if it exists
@@ -81,7 +82,7 @@ export class EmailTransferCommand extends BaseTransferCommand {
             const displayName2 = payee2.nickName || payee2.email;
             row.push({
               text: displayName2,
-              callback_data: `payee:${payee2.email}`,
+              callback_data: `payee:email:${payee2.email}`,
             });
           }
 
@@ -148,21 +149,82 @@ export class EmailTransferCommand extends BaseTransferCommand {
     const chatId = query.message.chat.id;
     const data = query.data;
 
+    // Answer callback query to remove loading indicator
+    bot.answerCallbackQuery(query.id);
+
+    // Handle amount selection
+    if (data.startsWith("amount:")) {
+      requireAuth(bot, chatId, async (_session) => {
+        const amountPart = data.split(":")[1];
+
+        if (amountPart === "custom") {
+          bot.sendMessage(
+            chatId,
+            "💰 Please enter the amount you want to send:",
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "❌ Cancel", callback_data: "transfer:cancel" }],
+                ],
+              },
+            }
+          );
+          return;
+        }
+
+        const amount = parseFloat(amountPart);
+        if (!isNaN(amount)) {
+          await this.processAmountSelection(bot, chatId, amount);
+        }
+      });
+      return;
+    }
+
+    // Handle transfer cancellation
+    if (data === "transfer:cancel") {
+      requireAuth(bot, chatId, async () => {
+        await this.sendCancelMessage(bot, chatId);
+      });
+      return;
+    }
+
     // Handle payee selection
     if (data.startsWith("payee:")) {
-      const email = data.substring(6); // Extract email from payee:email
-      await this.processEmailInput(bot, chatId, email);
+      requireAuth(bot, chatId, async () => {
+        // Check if this is a payee:email format from the payee list
+        if (data.startsWith("payee:email:")) {
+          const email = data.substring(12); // Extract email from payee:email:address
+          await this.processEmailInput(bot, chatId, email);
+          return;
+        }
+        // For backward compatibility with existing format
+        else if (data.split(":").length === 2) {
+          const email = data.substring(6); // Extract email from payee:email
+          await this.processEmailInput(bot, chatId, email);
+          return;
+        }
+      });
       return;
     }
 
     // Handle purpose selection
     if (data.startsWith("purpose:")) {
-      const purposeCode = data.split(":")[1];
-      await this.processPurposeSelection(bot, chatId, purposeCode);
+      requireAuth(bot, chatId, async () => {
+        const purposeCode = data.split(":")[1];
+        await this.processPurposeSelection(bot, chatId, purposeCode);
+      });
       return;
     }
 
-    // Other callbacks handled by parent class
+    // Handle transfer confirmation
+    if (data === "transfer:confirm") {
+      requireAuth(bot, chatId, async (session) => {
+        await this.processTransferConfirmation(bot, chatId, session);
+      });
+      return;
+    }
+
+    // If none of the above, let parent class handle it
     await super.handleCallback(bot, query);
   }
 
@@ -270,8 +332,9 @@ export class EmailTransferCommand extends BaseTransferCommand {
       return;
     }
 
-    // Update state with email
+    // Update state with email - make sure to keep currentAction
     this.updateSessionData<EmailTransferSessionState>(chatId, {
+      currentAction: "sendemail", // Maintain the currentAction
       email,
       step: "amount",
     });
@@ -332,6 +395,7 @@ export class EmailTransferCommand extends BaseTransferCommand {
 
     // Update state with amount and move to purpose selection
     this.updateSessionData<EmailTransferSessionState>(chatId, {
+      currentAction: "sendemail", // Maintain the currentAction
       amount,
       step: "purpose",
     });
@@ -366,6 +430,7 @@ export class EmailTransferCommand extends BaseTransferCommand {
 
     // Update state with purpose code
     this.updateSessionData<EmailTransferSessionState>(chatId, {
+      currentAction: "sendemail", // Maintain the currentAction
       purposeCode,
       step: "confirm",
     });

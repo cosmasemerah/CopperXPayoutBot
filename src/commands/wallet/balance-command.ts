@@ -6,6 +6,7 @@ import { handleApiErrorResponse } from "../../utils/error-handler";
 import { formatCurrency } from "../../utils/format";
 import { getModuleLogger } from "../../utils/logger";
 import { WalletBalance, Wallet } from "../../types/wallet";
+import { getNetworkName } from "../../utils/constants";
 
 // Create module logger
 const logger = getModuleLogger("balance-command");
@@ -49,11 +50,18 @@ export class BalanceCommand implements BotCommand {
             const wallet = wallets.find(
               (w: Wallet) => w.id === balance.walletId
             );
-            // Get network name from wallet or balance object
-            const networkName = wallet ? wallet.network : balance.network;
+
+            // Get proper network name from the constants utility
+            const networkId = wallet ? wallet.network : balance.network;
+            const networkName = getNetworkName(networkId, true); // Use full network name
             const isDefault = wallet?.isDefault ? " (Default)" : "";
 
             message += `*${networkName}${isDefault}*\n`;
+
+            // Include wallet address in the message with backticks for easy copying
+            if (wallet?.walletAddress) {
+              message += `Address: \`${wallet.walletAddress}\`\n`;
+            }
 
             // Check if balances array exists and has items
             if (balance.balances && balance.balances.length > 0) {
@@ -76,7 +84,8 @@ export class BalanceCommand implements BotCommand {
 
         // Transfer button
         keyboard.push([
-          { text: "💸 Transfer", callback_data: "wallet:transfer" },
+          { text: "💸 Transfer", callback_data: "action:transfer" },
+          { text: "📥 Deposit", callback_data: "menu:deposit" },
         ]);
 
         // Set default wallet button (if needed)
@@ -84,13 +93,13 @@ export class BalanceCommand implements BotCommand {
           keyboard.push([
             {
               text: "⭐ Set Default Wallet",
-              callback_data: "wallet:setdefault",
+              callback_data: "action:settings",
             },
           ]);
         }
 
         // Main menu button
-        keyboard.push([{ text: "📋 Main Menu", callback_data: "menu:main" }]);
+        keyboard.push([{ text: "🏠 Main Menu", callback_data: "menu:main" }]);
 
         // Update the loading message with actual data
         bot.editMessageText(message, {
@@ -122,7 +131,7 @@ export class BalanceCommand implements BotCommand {
     // Answer callback query to remove loading indicator
     bot.answerCallbackQuery(query.id);
 
-    if (callbackData === "menu:balance") {
+    if (callbackData === "menu:balance" || callbackData === "action:balance") {
       this.execute(bot, query.message as TelegramBot.Message);
     }
   }

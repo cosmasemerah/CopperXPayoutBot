@@ -54,7 +54,18 @@ export class HelpCommand implements BotCommand {
     bot: TelegramBot,
     query: TelegramBot.CallbackQuery
   ): Promise<void> {
-    // Help command doesn't have specific callback handlers
+    if (!query.message || !query.data) {
+      bot.answerCallbackQuery(query.id);
+      return;
+    }
+
+    const callbackData = query.data;
+
+    // Answer callback query to remove loading indicator
     bot.answerCallbackQuery(query.id);
+
+    if (callbackData === "menu:help") {
+      this.execute(bot, query.message as TelegramBot.Message);
+    }
   }
 }

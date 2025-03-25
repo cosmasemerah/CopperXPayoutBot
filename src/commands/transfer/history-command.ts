@@ -93,26 +93,13 @@ export class HistoryCommand extends BaseTransferCommand {
           }
         } else if (action === "menu") {
           this.clearSessionData(chatId);
-          bot.sendMessage(
-            chatId,
-            "📋 *Main Menu*\n\nWhat would you like to do?",
-            {
-              parse_mode: "Markdown",
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    { text: "💸 Send", callback_data: "menu:send" },
-                    { text: "🏧 Withdraw", callback_data: "menu:withdraw" },
-                  ],
-                  [
-                    { text: "📊 Balance", callback_data: "menu:balance" },
-                    { text: "📜 History", callback_data: "menu:history" },
-                  ],
-                  [{ text: "❓ Help", callback_data: "menu:help" }],
-                ],
-              },
-            }
-          );
+          bot.sendMessage(chatId, "Redirecting to main menu...", {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "🏠 Main Menu", callback_data: "menu:main" }],
+              ],
+            },
+          });
         } else {
           // Let the parent class handle other callbacks
           await super.handleCallback(bot, query);
@@ -230,9 +217,7 @@ export class HistoryCommand extends BaseTransferCommand {
       }
 
       // Add back to menu button
-      keyboard.push([
-        { text: "« Back to Menu", callback_data: "history:menu" },
-      ]);
+      keyboard.push([{ text: "« Back to Menu", callback_data: "menu:main" }]);
 
       // Update the loading message with actual data
       bot.editMessageText(message, {
