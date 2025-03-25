@@ -41,6 +41,13 @@ export interface BotCommand {
     bot: TelegramBot,
     query: TelegramBot.CallbackQuery
   ): Promise<void>;
+
+  /**
+   * Handle user text input for this command
+   * @param bot TelegramBot instance
+   * @param msg Message containing user input
+   */
+  handleUserInput?(bot: TelegramBot, msg: TelegramBot.Message): Promise<void>;
 }
 
 /**

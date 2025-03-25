@@ -11,6 +11,7 @@ import { getModuleLogger } from "../../utils/logger";
 import { NotificationCommand } from "../notification-command";
 import { AuthResponse, OTPState, OTPRequestResponse } from "../../types/auth";
 import { BaseAuthCommand } from "./base-auth-command";
+import { commandRegistry } from "../../core/command";
 
 // Create module logger
 const logger = getModuleLogger("login-command");
@@ -70,17 +71,44 @@ export class LoginCommand extends BaseAuthCommand {
       return;
     }
 
-    // Update session state
-    this.updateSessionData<LoginSessionState>(chatId, {
+    logger.debug(`[startAuthFlow] Setting login state for chat ${chatId}`);
+
+    // For non-logged in users, initialize a session state
+    if (!SessionService.getSessionState(chatId)) {
+      logger.debug(
+        `[startAuthFlow] Creating initial session state for ${chatId}`
+      );
+      SessionService.updateSessionState(chatId, {
+        currentAction: "login",
+        data: {},
+      });
+    }
+
+    // Now update the state with login details
+    SessionService.updateSessionState(chatId, {
       currentAction: "login",
-      loginStep: "email",
+      data: {
+        currentAction: "login",
+        loginStep: "email",
+      },
     });
+
+    const stateAfter = SessionService.getSessionState(chatId);
+    logger.debug(`[startAuthFlow] State after update:`, stateAfter);
 
     // Start login flow
     bot.sendMessage(
       chatId,
-      "Please enter your email address to receive an OTP:"
+      "Please enter your email address to receive an OTP:",
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "❌ Cancel Login", callback_data: "login:cancel" }],
+          ],
+        },
+      }
     );
+
     this.awaitingEmail.set(chatId, true);
   }
 
@@ -96,9 +124,17 @@ export class LoginCommand extends BaseAuthCommand {
     const chatId = query.message.chat.id;
     const callbackData = query.data;
 
+    logger.debug(
+      `[processCallback] Processing callback ${callbackData} for chat ${chatId}`
+    );
+
     if (callbackData === "action:login") {
       this.execute(bot, query.message as TelegramBot.Message);
     } else if (callbackData === "login:cancel") {
+      logger.debug(
+        `[processCallback] Cancelling login flow for chat ${chatId}`
+      );
+
       // Cancel login flow
       this.awaitingEmail.delete(chatId);
       this.awaitingOTP.delete(chatId);
@@ -106,6 +142,7 @@ export class LoginCommand extends BaseAuthCommand {
       // Clear session data
       this.clearSessionData(chatId);
 
+      // Send confirmation
       bot.sendMessage(chatId, "Login process canceled.", {
         reply_markup: {
           inline_keyboard: [
@@ -128,17 +165,62 @@ export class LoginCommand extends BaseAuthCommand {
 
     const chatId = msg.chat.id;
 
-    // Handle email input
+    // Get the raw session state first for debugging
+    const rawState = SessionService.getSessionState(chatId);
+    logger.debug(
+      `[handleUserInput] Raw session state for ${chatId}:`,
+      rawState
+    );
+
+    // Get the state using our helper
+    const state = this.getSessionData<LoginSessionState>(chatId);
+    logger.debug(
+      `[handleUserInput] Processed session data for ${chatId}:`,
+      state
+    );
+
+    // First check our session state
+    if (state && state.currentAction === "login") {
+      switch (state.loginStep) {
+        case "email":
+          logger.debug(
+            `[handleUserInput] Processing email input for ${chatId} from session state`
+          );
+          await this.handleEmailInput(bot, msg);
+          return;
+        case "otp":
+          logger.debug(
+            `[handleUserInput] Processing OTP input for ${chatId} from session state`
+          );
+          await this.handleOTPInput(bot, msg);
+          return;
+        default:
+          logger.warn(
+            `[handleUserInput] Unknown login step: ${state.loginStep}`
+          );
+      }
+    }
+
+    // Fallback to the old tracking mechanism
     if (this.awaitingEmail.has(chatId)) {
-      this.handleEmailInput(bot, msg);
+      logger.debug(
+        `[handleUserInput] Processing email input for ${chatId} from awaitingEmail map`
+      );
+      await this.handleEmailInput(bot, msg);
       return;
     }
 
-    // Handle OTP input
     if (this.awaitingOTP.has(chatId)) {
-      this.handleOTPInput(bot, msg);
+      logger.debug(
+        `[handleUserInput] Processing OTP input for ${chatId} from awaitingOTP map`
+      );
+      await this.handleOTPInput(bot, msg);
       return;
     }
+
+    logger.debug(
+      `[handleUserInput] Ignoring input: Not in login flow. Current action: ${state?.currentAction}`
+    );
   }
 
   /**
@@ -296,16 +378,18 @@ export class LoginCommand extends BaseAuthCommand {
 }
 
 /**
- * Create and register message handlers for login flow
+ * Register message handlers for login flow
  * @param bot The Telegram bot instance
  */
 export function registerLoginMessageHandlers(bot: TelegramBot): void {
-  bot.on("message", (msg) => {
-    if (!msg.text || msg.text.startsWith("/")) return;
+  const loginCommand = new LoginCommand();
 
-    const loginCommand = new LoginCommand();
+  // Register the login command for handling messages
+  commandRegistry.registerCommand(loginCommand);
 
-    // Handle login input
-    loginCommand.handleUserInput(bot, msg);
-  });
+  // Register callback handlers
+  commandRegistry.registerCallbackHandler("action:login", loginCommand);
+  commandRegistry.registerCallbackHandler("login", loginCommand);
+
+  logger.info("Login message handlers registered successfully");
 }

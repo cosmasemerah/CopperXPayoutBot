@@ -59,15 +59,15 @@ export class ProfileCommand extends BaseAuthCommand {
 
         // Format profile message
         let message = "👤 *Your Profile*\n\n";
-        message += `*Name:* ${profile.firstName} ${profile.lastName}\n`;
-        message += `*Email:* ${profile.email}\n`;
+        message += `*Name:* ${profile.firstName || ""} ${
+          profile.lastName || ""
+        }\n`;
+        message += `*Email:* ${profile.email || "Not provided"}\n`;
         message += `*Organization:* ${
           profile.organizationId || "Not provided"
         }\n`;
         message += `*Account Type:* ${profile.type || "Standard"}\n`;
-        message += `*Created:* ${new Date(
-          profile.createdAt
-        ).toLocaleDateString()}\n\n`;
+        message += `*Status:* ${profile.status}\n\n`;
 
         // Update the loading message with actual data
         bot.editMessageText(message, {

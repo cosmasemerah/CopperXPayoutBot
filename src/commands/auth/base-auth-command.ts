@@ -1,6 +1,10 @@
 import TelegramBot from "node-telegram-bot-api";
 import { BotCommand } from "../../core/command";
 import { SessionService, SessionState } from "../../core/session.service";
+import { getModuleLogger } from "../../utils/logger";
+
+// Create module logger
+const logger = getModuleLogger("base-auth-command");
 
 /**
  * Base interface for auth session state
@@ -94,7 +98,25 @@ export abstract class BaseAuthCommand implements BotCommand {
     chatId: number
   ): T | undefined {
     const sessionState = SessionService.getSessionState(chatId);
-    return sessionState as T | undefined;
+    logger.debug(
+      `[getSessionData] Raw session state for ${chatId}:`,
+      sessionState
+    );
+
+    // If we have a session state with data, use it
+    if (sessionState?.data) {
+      logger.debug(`[getSessionData] Using data property for ${chatId}`);
+      return sessionState.data as T;
+    }
+
+    // Otherwise, try to use the session state itself (for backward compatibility)
+    if (sessionState) {
+      logger.debug(`[getSessionData] Using session state itself for ${chatId}`);
+      return sessionState as T;
+    }
+
+    logger.debug(`[getSessionData] No session state found for ${chatId}`);
+    return undefined;
   }
 
   /**
@@ -106,10 +128,28 @@ export abstract class BaseAuthCommand implements BotCommand {
     chatId: number,
     newData: Partial<T>
   ): void {
-    const currentState = SessionService.getSessionState(chatId) || {};
+    logger.debug(
+      `[updateSessionData] Updating session for ${chatId} with:`,
+      newData
+    );
+
+    const sessionState = SessionService.getSessionState(chatId) || { data: {} };
+
+    // Make sure we preserve the current action by default
+    if (!newData.currentAction && sessionState.currentAction) {
+      newData.currentAction = sessionState.currentAction;
+    }
+
+    const updatedData = { ...(sessionState.data as T), ...newData };
+
+    logger.debug(`[updateSessionData] Final update for ${chatId}:`, {
+      currentAction: newData.currentAction || sessionState.currentAction,
+      data: updatedData,
+    });
+
     SessionService.updateSessionState(chatId, {
-      ...currentState,
-      ...newData,
+      currentAction: newData.currentAction || sessionState.currentAction,
+      data: updatedData,
     });
   }
 
@@ -120,6 +160,7 @@ export abstract class BaseAuthCommand implements BotCommand {
   protected clearSessionData(chatId: number): void {
     SessionService.updateSessionState(chatId, {
       currentAction: undefined,
+      data: {},
     });
   }
 

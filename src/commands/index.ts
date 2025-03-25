@@ -74,8 +74,5 @@ export function registerAllCommands(bot: TelegramBot): void {
   // Log all registered callback handlers
   commandRegistry.logRegisteredHandlers();
 
-  // Debug message to help trace execution
-  logger.info(
-    "All commands registered successfully. When executing from src/commands/index.ts"
-  );
+  logger.info("All commands registered successfully");
 }

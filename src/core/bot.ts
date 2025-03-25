@@ -127,6 +127,35 @@ export function startBot(): TelegramBot {
     }
   });
 
+  // Add unified message handler for all user inputs
+  bot.on("message", async (msg) => {
+    // Skip command messages which start with /
+    if (!msg.text || msg.text.startsWith("/")) return;
+
+    const chatId = msg.chat.id;
+    logger.debug(`Processing message: "${msg.text}" from chat ${chatId}`);
+
+    try {
+      // Get session state to determine current action
+      const session = SessionService.getSessionState(chatId);
+      logger.debug(`Current session state:`, session);
+
+      // Try each command's handleUserInput method
+      const commands = commandRegistry.getCommands();
+      for (const command of commands) {
+        if (command.handleUserInput) {
+          try {
+            await command.handleUserInput(bot, msg);
+          } catch (error: any) {
+            logger.error(`Error in ${command.name}.handleUserInput:`, error);
+          }
+        }
+      }
+    } catch (error: any) {
+      logger.error(`Error in global message handler:`, error);
+    }
+  });
+
   // Error handling for bot API errors
   bot.on("error", (error) => {
     logger.error(`Bot error:`, error);
