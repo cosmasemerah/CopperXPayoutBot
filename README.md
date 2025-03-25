@@ -95,27 +95,48 @@ The codebase uses TypeScript throughout:
 
 ### Environment Variables
 
-Create a `.env` file in the project root with the following variables:
+The project includes a `.env.example` file with all the required environment variables. To set up your environment:
 
-```
-# Bot Configuration
-BOT_TOKEN=your_telegram_bot_token
-BOT_WEBHOOK_URL=your_webhook_url (optional for production)
+1. Copy the example file to create your own `.env` file:
 
-# API Configuration
-API_BASE_URL=https://income-api.copperx.io
-API_TIMEOUT=30000
+   ```bash
+   cp .env.example .env
+   ```
 
-# Pusher Configuration (for real-time notifications)
-PUSHER_KEY=e089376087cac1a62785
-PUSHER_CLUSTER=ap1
+2. Edit the `.env` file and replace the placeholder values with your actual credentials:
 
-# Session Configuration
-SESSION_ENCRYPTION_KEY=your_encryption_key
-SESSION_SAVE_PATH=./data/sessions.json
+   ```
+   # Bot Configuration
+   BOT_TOKEN=your_telegram_bot_token
+   # BOT_WEBHOOK_URL=your_webhook_url_for_production
 
-# Logging
-LOG_LEVEL=info
+   # API Configuration
+   API_BASE_URL=https://income-api.copperx.io
+   API_TIMEOUT=30000
+
+   # Pusher Configuration (for real-time notifications)
+   PUSHER_KEY=e089376087cac1a62785
+   PUSHER_CLUSTER=ap1
+
+   # Session Configuration
+   SESSION_ENCRYPTION_KEY=generate_a_secure_random_key
+   # SESSION_SAVE_PATH=./data/sessions.json
+
+   # Logging (options: error, warn, info, debug)
+   LOG_LEVEL=info
+
+   # Server Configuration
+   PORT=3000
+   ```
+
+3. At minimum, you must set:
+   - `BOT_TOKEN`: Obtain from [@BotFather](https://t.me/botfather)
+   - `SESSION_ENCRYPTION_KEY`: Generate a secure random string
+
+To generate a secure random key for `SESSION_ENCRYPTION_KEY`, you can use:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
 ### Installation
@@ -228,6 +249,16 @@ npm run test:coverage
 
 ## 📦 Deployment
 
+### Health Check Endpoint
+
+The application includes a built-in HTTP server that serves as a health check endpoint. This is particularly useful for hosting platforms that require health checks to determine if the application is running properly.
+
+- The health check server runs on port 3000 by default (configurable via the `PORT` environment variable)
+- It responds to all HTTP requests with a 200 status code and the message "CopperX Telegram Bot is running!"
+- The server is automatically started when the application starts
+
+When deploying to platforms like Render.com or Heroku, you can configure their health check to point to this endpoint to ensure the application is properly monitored.
+
 ### Deploying on Render.com
 
 1. Create a new Web Service on Render
@@ -235,7 +266,8 @@ npm run test:coverage
 3. Set the build command: `npm install && npm run build`
 4. Set the start command: `npm start`
 5. Add all required environment variables
-6. Deploy the service
+6. Set the health check path to `/` on port 3000
+7. Deploy the service
 
 ### Setting Up Webhook (Production)
 

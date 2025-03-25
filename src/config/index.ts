@@ -4,7 +4,7 @@ dotenv.config();
 
 export const config = {
   botToken: process.env.BOT_TOKEN || "",
-  apiBaseUrl: "https://income-api.copperx.io",
+  apiBaseUrl: process.env.API_BASE_URL || "https://income-api.copperx.io",
   pusher: {
     key: process.env.PUSHER_KEY || "",
     cluster: process.env.PUSHER_CLUSTER || "ap1",
