@@ -61,11 +61,11 @@ export class TransferMenuCommand implements BotCommand {
 
     const keyboard: TelegramBot.InlineKeyboardButton[][] = [
       [{ text: "📧 Send to Email", callback_data: "transfer:method:email" }],
-      [{ text: "🔑 Send to Wallet", callback_data: "transfer:method:wallet" }],
+      [{ text: "🔗 Send to Wallet", callback_data: "transfer:method:wallet" }],
       [{ text: "🏦 Bank Withdrawal", callback_data: "transfer:method:bank" }],
       [{ text: "📊 Batch Transfer", callback_data: "transfer:method:batch" }],
       [{ text: "📥 Deposit", callback_data: "menu:deposit" }],
-      [{ text: "📜 History", callback_data: "menu:history" }],
+      [{ text: "⏱️ History", callback_data: "menu:history" }],
       [{ text: "❌ Cancel", callback_data: "menu:main" }],
     ];
 

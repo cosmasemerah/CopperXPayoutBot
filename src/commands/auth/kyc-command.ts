@@ -113,7 +113,7 @@ export class KYCCommand extends BaseAuthCommand {
                   url: "https://app.copperx.io/kyc",
                 },
               ],
-              [{ text: "🏠 Main Menu", callback_data: "menu:main" }],
+              [{ text: "« Back to Menu", callback_data: "menu:main" }],
             ],
           },
         });

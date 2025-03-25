@@ -108,6 +108,7 @@ export function registerTransferCommands(_bot: TelegramBot): void {
   commandRegistry.registerCallbackHandler("menu:addpayee", payeeCommand);
   commandRegistry.registerCallbackHandler("menu:payees", payeeCommand);
   commandRegistry.registerCallbackHandler("menu:listpayees", payeeCommand);
+  commandRegistry.registerCallbackHandler("menu:removepayee", payeeCommand);
 
   logger.info("Transfer commands registered successfully");
 }

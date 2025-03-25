@@ -147,7 +147,7 @@ export function handleApiErrorResponse(
     keyboard.push([{ text: "🔑 Login", callback_data: "action:login" }]);
   }
 
-  keyboard.push([{ text: "📋 Main Menu", callback_data: "menu:main" }]);
+  keyboard.push([{ text: "« Back to Menu", callback_data: "menu:main" }]);
 
   bot.sendMessage(chatId, message, {
     parse_mode: "Markdown",

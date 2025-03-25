@@ -77,8 +77,8 @@ export class ProfileCommand extends BaseAuthCommand {
           reply_markup: {
             inline_keyboard: [
               [
-                { text: "🔑 KYC Status", callback_data: "action:kyc" },
-                { text: "🏠 Main Menu", callback_data: "menu:main" },
+                { text: "🆔 KYC Status", callback_data: "action:kyc" },
+                { text: "« Back to Menu", callback_data: "menu:main" },
               ],
             ],
           },

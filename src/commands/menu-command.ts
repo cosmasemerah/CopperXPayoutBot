@@ -41,12 +41,16 @@ export class MenuCommand implements BotCommand {
    * Send main menu
    */
   private async sendMainMenu(bot: TelegramBot, chatId: number): Promise<void> {
-    bot.sendMessage(chatId, "🏠 *Main Menu*\n\nPlease select an option:", {
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: createMainMenuKeyboard(),
-      },
-    });
+    bot.sendMessage(
+      chatId,
+      "🏠 *Main Menu*\n\nWelcome to the Copperx Payout Bot! Please choose one of the following options to proceed:",
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: createMainMenuKeyboard(),
+        },
+      }
+    );
   }
 
   /**

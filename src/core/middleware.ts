@@ -74,7 +74,7 @@ export function requireFlowState(
       {
         reply_markup: {
           inline_keyboard: [
-            [{ text: "🏠 Main Menu", callback_data: "menu:main" }],
+            [{ text: "« Back to Menu", callback_data: "menu:main" }],
           ],
         },
       }

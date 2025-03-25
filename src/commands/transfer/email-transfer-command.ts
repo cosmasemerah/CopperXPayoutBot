@@ -471,7 +471,7 @@ export class EmailTransferCommand extends BaseTransferCommand {
             parse_mode: "Markdown",
             reply_markup: {
               inline_keyboard: [
-                [{ text: "💰 Deposit", callback_data: "action:deposit" }],
+                [{ text: "📥 Deposit", callback_data: "action:deposit" }],
                 [{ text: "❌ Cancel", callback_data: "transfer:cancel" }],
               ],
             },
@@ -557,7 +557,7 @@ export class EmailTransferCommand extends BaseTransferCommand {
         reply_markup: {
           inline_keyboard: [
             [{ text: "💰 View Balance", callback_data: "action:balance" }],
-            [{ text: "🏠 Main Menu", callback_data: "menu:main" }],
+            [{ text: "« Back to Menu", callback_data: "menu:main" }],
           ],
         },
       });

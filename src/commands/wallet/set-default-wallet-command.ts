@@ -41,7 +41,7 @@ export class SetDefaultWalletCommand implements BotCommand {
             message_id: loadingMsg.message_id,
             reply_markup: {
               inline_keyboard: [
-                [{ text: "🏠 Main Menu", callback_data: "menu:main" }],
+                [{ text: "« Back to Menu", callback_data: "menu:main" }],
               ],
             },
           });
@@ -154,7 +154,7 @@ export class SetDefaultWalletCommand implements BotCommand {
                       callback_data: "action:balance",
                     },
                   ],
-                  [{ text: "🏠 Main Menu", callback_data: "menu:main" }],
+                  [{ text: "« Back to Menu", callback_data: "menu:main" }],
                 ],
               },
             }
@@ -173,10 +173,10 @@ export class SetDefaultWalletCommand implements BotCommand {
 
     // Handle cancellation
     if (callbackData === "setdefault:cancel") {
-      bot.sendMessage(chatId, "⚙️ Default wallet setting canceled.", {
+      bot.sendMessage(chatId, "⭐ Default wallet setting canceled.", {
         reply_markup: {
           inline_keyboard: [
-            [{ text: "🏠 Main Menu", callback_data: "menu:main" }],
+            [{ text: "« Back to Menu", callback_data: "menu:main" }],
           ],
         },
       });

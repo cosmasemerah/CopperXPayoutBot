@@ -100,6 +100,9 @@ export class PayeeCommand implements BotCommand {
           case "no":
             this.handleDeclineAddPayee(bot, chatId, messageId);
             break;
+          case "skip":
+            this.handleSkipNickname(bot, chatId, messageId);
+            break;
           case "remove":
             if (parts.length >= 3) {
               this.removePayee(bot, chatId, messageId, session.token, parts[2]);
@@ -124,6 +127,10 @@ export class PayeeCommand implements BotCommand {
       requireAuth(bot, chatId, (session) => {
         this.listPayees(bot, chatId, session.token);
       });
+    } else if (callbackData === "menu:removepayee") {
+      requireAuth(bot, chatId, (session) => {
+        this.showRemovePayeeOptions(bot, chatId, session.token);
+      });
     }
   }
 
@@ -142,11 +149,25 @@ export class PayeeCommand implements BotCommand {
 
     // Get session state
     const sessionState = SessionService.getSessionState(chatId);
-    if (!sessionState || sessionState.currentAction !== "addpayee") return;
+    logger.debug(
+      `[handleUserInput] Processing input for chat ${chatId}: Session state: ${JSON.stringify(
+        sessionState
+      )}`
+    );
+
+    if (!sessionState || sessionState.currentAction !== "addpayee") {
+      logger.debug(
+        `[handleUserInput] Ignoring input: Not in addpayee flow. Current action: ${sessionState?.currentAction}`
+      );
+      return;
+    }
 
     // Use requireAuth middleware
     requireAuth(bot, chatId, (_session) => {
       const data = sessionState.data as AddPayeeState;
+      logger.debug(
+        `[handleUserInput] Processing step: ${data.step}, Input text: ${text}`
+      );
 
       // Handle each step in the add payee flow
       switch (data.step) {
@@ -194,9 +215,14 @@ export class PayeeCommand implements BotCommand {
     chatId: number,
     email: string
   ): void {
+    logger.debug(
+      `[processEmailInput] Processing email input: ${email} for chat ${chatId}`
+    );
+
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
+      logger.debug(`[processEmailInput] Invalid email format: ${email}`);
       bot.sendMessage(
         chatId,
         "❌ Invalid email format. Please enter a valid email address:",
@@ -212,22 +238,29 @@ export class PayeeCommand implements BotCommand {
     }
 
     // Update state with email and move to nickname step
+    logger.debug(
+      `[processEmailInput] Valid email, updating state to nickname step`
+    );
     SessionService.updateSessionState(chatId, {
       currentAction: "addpayee",
       data: { step: "nickname", email } as AddPayeeState,
     });
 
-    // Ask for nickname
+    // Ask for nickname with option to skip
     bot.sendMessage(
       chatId,
-      `📝 Email: ${email}\n\nPlease enter a nickname for this payee:`,
+      `📝 Email: ${email}\n\nPlease enter a nickname for this payee or click Skip to use the email address:`,
       {
         reply_markup: {
           inline_keyboard: [
+            [{ text: "⏩ Skip", callback_data: "payee:skip" }],
             [{ text: "❌ Cancel", callback_data: "payee:cancel" }],
           ],
         },
       }
+    );
+    logger.debug(
+      `[processEmailInput] Sent nickname prompt message for email: ${email}`
     );
   }
 
@@ -240,29 +273,13 @@ export class PayeeCommand implements BotCommand {
     nickname: string,
     data: AddPayeeState
   ): void {
-    // Validate nickname is not empty
-    if (!nickname.trim()) {
-      bot.sendMessage(
-        chatId,
-        "❌ Nickname cannot be empty. Please enter a nickname:",
-        {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: "❌ Cancel", callback_data: "payee:cancel" }],
-            ],
-          },
-        }
-      );
-      return;
-    }
-
     // Move to confirmation step
     SessionService.updateSessionState(chatId, {
       currentAction: "addpayee",
       data: {
         step: "confirm",
         email: data.email,
-        nickName: nickname,
+        nickName: nickname.trim() || data.email, // Use email as fallback if nickname is empty
       } as AddPayeeState,
     });
 
@@ -271,9 +288,82 @@ export class PayeeCommand implements BotCommand {
       chatId,
       `⚠️ *Please Confirm Payee Details*\n\n` +
         `Email: ${data.email}\n` +
-        `Nickname: ${nickname}\n\n` +
+        `Nickname: ${nickname.trim() || data.email}\n\n` +
         `Do you want to add this payee?`,
       {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: createYesNoKeyboard("payee"),
+        },
+      }
+    );
+  }
+
+  /**
+   * Handle skip nickname action
+   */
+  private handleSkipNickname(
+    bot: TelegramBot,
+    chatId: number,
+    messageId: number
+  ): void {
+    // Get session state
+    const sessionState = SessionService.getSessionState(chatId);
+    if (!sessionState || sessionState.currentAction !== "addpayee") {
+      bot.editMessageText(
+        "⚠️ Error: Operation is no longer active. Please start again.",
+        {
+          chat_id: chatId,
+          message_id: messageId,
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "« Back to Menu", callback_data: "menu:main" }],
+            ],
+          },
+        }
+      );
+      return;
+    }
+
+    const data = sessionState.data as AddPayeeState;
+    if (!data.email) {
+      bot.editMessageText(
+        "⚠️ Error: Missing email information. Please start again.",
+        {
+          chat_id: chatId,
+          message_id: messageId,
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "« Back to Menu", callback_data: "menu:main" }],
+            ],
+          },
+        }
+      );
+      return;
+    }
+
+    // Use email as nickname
+    const email = data.email;
+
+    // Move to confirmation step
+    SessionService.updateSessionState(chatId, {
+      currentAction: "addpayee",
+      data: {
+        step: "confirm",
+        email: email,
+        nickName: email, // Use email as the nickname
+      } as AddPayeeState,
+    });
+
+    // Ask for confirmation
+    bot.editMessageText(
+      `⚠️ *Please Confirm Payee Details*\n\n` +
+        `Email: ${email}\n` +
+        `Nickname: ${email}\n\n` +
+        `Do you want to add this payee?`,
+      {
+        chat_id: chatId,
+        message_id: messageId,
         parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: createYesNoKeyboard("payee"),
@@ -336,6 +426,7 @@ export class PayeeCommand implements BotCommand {
         reply_markup: {
           inline_keyboard: [
             [{ text: "➕ Add Payee", callback_data: "menu:addpayee" }],
+            [{ text: "➖ Remove Payee", callback_data: "menu:removepayee" }],
             [{ text: "« Back to Menu", callback_data: "menu:main" }],
           ],
         },
@@ -383,7 +474,7 @@ export class PayeeCommand implements BotCommand {
         message_id: messageId,
         reply_markup: {
           inline_keyboard: [
-            [{ text: "📋 View Payees", callback_data: "menu:payees" }],
+            [{ text: "👥 View Payees", callback_data: "menu:payees" }],
             [{ text: "« Back to Menu", callback_data: "menu:main" }],
           ],
         },
@@ -533,23 +624,88 @@ export class PayeeCommand implements BotCommand {
       },
     });
   }
+
+  /**
+   * Show options to remove payees
+   */
+  private async showRemovePayeeOptions(
+    bot: TelegramBot,
+    chatId: number,
+    token: string
+  ): Promise<void> {
+    try {
+      // Send loading message
+      const loadingMsg = await bot.sendMessage(
+        chatId,
+        "Loading your payees... Please wait."
+      );
+
+      // Fetch payees
+      const payeeResponse = await payeeService.getPayees(token);
+
+      if (payeeResponse.data.length === 0) {
+        bot.editMessageText(
+          "📝 You don't have any saved payees yet. There's nothing to remove.",
+          {
+            chat_id: chatId,
+            message_id: loadingMsg.message_id,
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "➕ Add Payee", callback_data: "menu:addpayee" }],
+                [{ text: "« Back to Menu", callback_data: "menu:main" }],
+              ],
+            },
+          }
+        );
+        return;
+      }
+
+      // Create keyboard with remove buttons for each payee
+      const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
+
+      payeeResponse.data.forEach((payee: Payee) => {
+        const displayName = payee.nickName || payee.email;
+        keyboard.push([
+          {
+            text: `❌ ${displayName}`,
+            callback_data: `payee:remove:${payee.id}`,
+          },
+        ]);
+      });
+
+      // Add cancel and back buttons
+      keyboard.push([
+        { text: "« Back to Payees", callback_data: "menu:payees" },
+      ]);
+      keyboard.push([{ text: "« Back to Menu", callback_data: "menu:main" }]);
+
+      // Send result
+      bot.editMessageText("🗑️ *Remove Payees*\n\nSelect a payee to remove:", {
+        chat_id: chatId,
+        message_id: loadingMsg.message_id,
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: keyboard,
+        },
+      });
+    } catch (error: any) {
+      logger.error("Show remove payee options error:", error);
+      handleApiErrorResponse(bot, chatId, error, "menu:payees");
+    }
+  }
 }
 
 /**
  * Register message handlers for payee operations
  * @param bot The Telegram bot instance
  */
-export function registerPayeeMessageHandlers(bot: TelegramBot): void {
-  bot.on("message", (msg) => {
-    if (!msg.text || msg.text.startsWith("/")) return;
+export function registerPayeeMessageHandlers(_bot: TelegramBot): void {
+  // NOTE: This function is kept for backward compatibility but is no longer needed
+  // The main message handler in registerTransferMessageHandlers already handles addpayee actions
+  // This avoids duplicate handlers processing the same messages
 
-    const chatId = msg.chat.id;
-    const sessionState = SessionService.getSessionState(chatId);
-
-    // Handle add payee flow with session state
-    if (sessionState?.currentAction === "addpayee") {
-      const payeeCommand = new PayeeCommand();
-      payeeCommand.handleUserInput(bot, msg);
-    }
-  });
+  // We're intentionally NOT registering duplicate handlers here
+  logger.debug(
+    "Payee message handlers integration handled by main transfer handler"
+  );
 }

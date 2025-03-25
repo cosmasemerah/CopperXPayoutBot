@@ -96,7 +96,7 @@ export class HistoryCommand extends BaseTransferCommand {
           bot.sendMessage(chatId, "Redirecting to main menu...", {
             reply_markup: {
               inline_keyboard: [
-                [{ text: "🏠 Main Menu", callback_data: "menu:main" }],
+                [{ text: "« Back to Menu", callback_data: "menu:main" }],
               ],
             },
           });

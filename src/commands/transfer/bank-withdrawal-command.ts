@@ -302,7 +302,7 @@ export class BankWithdrawalCommand extends BaseTransferCommand {
         reply_markup: {
           inline_keyboard: [
             [{ text: "💰 View Balance", callback_data: "action:balance" }],
-            [{ text: "🏠 Main Menu", callback_data: "menu:main" }],
+            [{ text: "« Back to Menu", callback_data: "menu:main" }],
           ],
         },
       });

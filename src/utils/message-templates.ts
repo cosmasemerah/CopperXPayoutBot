@@ -89,7 +89,7 @@ export function sendErrorMessage(
   if (retry) {
     keyboard.push([{ text: "🔄 Try Again", callback_data: retry }]);
   }
-  keyboard.push([{ text: "📋 Main Menu", callback_data: "menu:main" }]);
+  keyboard.push([{ text: "« Back to Menu", callback_data: "menu:main" }]);
 
   return bot.sendMessage(chatId, formattedMessage, {
     parse_mode: "Markdown",

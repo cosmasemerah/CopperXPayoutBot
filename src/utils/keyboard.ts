@@ -174,20 +174,24 @@ export function createQRCodeResponseKeyboard(): TelegramBot.InlineKeyboardButton
 export function createMainMenuKeyboard(): TelegramBot.InlineKeyboardButton[][] {
   return [
     [
+      { text: "👤 Profile", callback_data: "action:profile" },
       { text: "💰 Balance", callback_data: "action:balance" },
+    ],
+    [
+      { text: "💼 Wallets", callback_data: "action:wallets" },
       { text: "💸 Send", callback_data: "action:transfer" },
     ],
     [
       { text: "📥 Deposit", callback_data: "menu:deposit" },
-      { text: "📜 History", callback_data: "menu:history" },
+      { text: "⏱️ History", callback_data: "menu:history" },
     ],
     [
-      { text: "👤 Profile", callback_data: "action:profile" },
-      { text: "🔑 KYC", callback_data: "action:kyc" },
+      { text: "🏦 Withdraw to Bank", callback_data: "transfer:method:bank" },
+      { text: "👥 Payees", callback_data: "menu:listpayees" },
     ],
     [
-      { text: "📋 Payees", callback_data: "menu:listpayees" },
-      { text: "⚙️ Settings", callback_data: "action:settings" },
+      { text: "🆔 KYC", callback_data: "action:kyc" },
+      { text: "⭐ Default Wallet", callback_data: "action:settings" },
     ],
     [
       { text: "❓ Help", callback_data: "menu:help" },
@@ -204,12 +208,9 @@ export function createSendOptionsKeyboard(): TelegramBot.InlineKeyboardButton[][
   return [
     [
       { text: "📧 Send to Email", callback_data: "send:email" },
-      { text: "🔑 Send to Wallet", callback_data: "send:wallet" },
+      { text: "🔗 Send to Wallet", callback_data: "send:wallet" },
     ],
-    [
-      { text: "🏦 Withdraw to Bank", callback_data: "send:bank" },
-      { text: "↩️ Back to Menu", callback_data: "menu:main" },
-    ],
+    [{ text: "« Back to Menu", callback_data: "menu:main" }],
   ];
 }
 
@@ -446,9 +447,8 @@ export function createWalletKeyboard(
 export function createTransferMethodKeyboard(): TelegramBot.InlineKeyboardButton[][] {
   return [
     [{ text: "📧 Email", callback_data: "transfer:method:email" }],
-    [{ text: "📞 Phone", callback_data: "transfer:method:phone" }],
-    [{ text: "📋 Wallet Address", callback_data: "transfer:method:address" }],
-    [{ text: "↩️ Cancel", callback_data: "menu:main" }],
+    [{ text: "🔗 Wallet Address", callback_data: "transfer:method:address" }],
+    [{ text: "❌ Cancel", callback_data: "menu:main" }],
   ];
 }
 
@@ -468,7 +468,7 @@ export function createAmountKeyboard(): TelegramBot.InlineKeyboardButton[][] {
       { text: "$200", callback_data: "amount:200" },
     ],
     [{ text: "Custom Amount", callback_data: "amount:custom" }],
-    [{ text: "↩️ Cancel", callback_data: "transfer:cancel" }],
+    [{ text: "❌ Cancel", callback_data: "transfer:cancel" }],
   ];
 }
 
