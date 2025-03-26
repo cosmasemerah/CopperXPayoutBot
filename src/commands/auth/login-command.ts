@@ -17,12 +17,23 @@ import { commandRegistry } from "../../core/command";
 const logger = getModuleLogger("login-command");
 
 /**
- * Interface for login session state
+ * Interface for login session data stored in SessionState.data
+ *
+ * This represents the structure of data we store in the "data" property
+ * of the session state for the login flow. When checking the current step,
+ * we can do:
+ *
+ * if (sessionState?.currentAction === "login") {
+ *   const loginData = sessionState.data as LoginData;
+ *   if (loginData.loginStep === "email") { ... }
+ * }
  */
-interface LoginSessionState extends SessionState {
-  currentAction: "login";
+interface LoginSessionState {
+  /** Current step in the login flow */
   loginStep: "email" | "otp";
+  /** User's email address (stored after email step) */
   email?: string;
+  /** Session ID for OTP verification */
   sid?: string;
 }
 
@@ -73,28 +84,42 @@ export class LoginCommand extends BaseAuthCommand {
 
     logger.debug(`[startAuthFlow] Setting login state for chat ${chatId}`);
 
-    // For non-logged in users, initialize a session state
-    if (!SessionService.getSessionState(chatId)) {
-      logger.debug(
-        `[startAuthFlow] Creating initial session state for ${chatId}`
-      );
-      SessionService.updateSessionState(chatId, {
-        currentAction: "login",
-        data: {},
-      });
-    }
-
-    // Now update the state with login details
-    SessionService.updateSessionState(chatId, {
+    // Set login state with correct structure
+    const updateResult = SessionService.updateSessionState(chatId, {
       currentAction: "login",
       data: {
-        currentAction: "login",
         loginStep: "email",
       },
     });
 
+    logger.debug(`[startAuthFlow] Session update result: ${updateResult}`);
+
+    // Let's check if the session state was actually set
     const stateAfter = SessionService.getSessionState(chatId);
     logger.debug(`[startAuthFlow] State after update:`, stateAfter);
+
+    if (!stateAfter || stateAfter.currentAction !== "login") {
+      logger.error(`[startAuthFlow] Failed to set session state for ${chatId}`);
+      // Create a new session if it doesn't exist
+      SessionService.setSession(chatId, {
+        token: "", // Empty token for temporary session
+        expireAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+        organizationId: "",
+        state: {
+          currentAction: "login",
+          data: {
+            loginStep: "email",
+          },
+        },
+      });
+
+      // Check again
+      const stateAfterFix = SessionService.getSessionState(chatId);
+      logger.debug(
+        `[startAuthFlow] State after creating session:`,
+        stateAfterFix
+      );
+    }
 
     // Start login flow
     bot.sendMessage(
@@ -139,8 +164,8 @@ export class LoginCommand extends BaseAuthCommand {
       this.awaitingEmail.delete(chatId);
       this.awaitingOTP.delete(chatId);
 
-      // Clear session data
-      this.clearSessionData(chatId);
+      // Clear session data directly
+      SessionService.updateSessionState(chatId, {});
 
       // Send confirmation
       bot.sendMessage(chatId, "Login process canceled.", {
@@ -165,61 +190,97 @@ export class LoginCommand extends BaseAuthCommand {
 
     const chatId = msg.chat.id;
 
-    // Get the raw session state first for debugging
-    const rawState = SessionService.getSessionState(chatId);
+    // Add detailed debugging
     logger.debug(
-      `[handleUserInput] Raw session state for ${chatId}:`,
-      rawState
+      `[handleUserInput] Called for chat ${chatId} with text: "${msg.text.substring(
+        0,
+        10
+      )}..."`
     );
 
-    // Get the state using our helper
-    const state = this.getSessionData<LoginSessionState>(chatId);
+    // Check if we're awaiting input from this chat
+    const isAwaitingEmail = this.awaitingEmail.has(chatId);
+    const isAwaitingOTP = this.awaitingOTP.has(chatId);
     logger.debug(
-      `[handleUserInput] Processed session data for ${chatId}:`,
-      state
+      `[handleUserInput] Tracking state - awaitingEmail: ${isAwaitingEmail}, awaitingOTP: ${isAwaitingOTP}`
     );
 
-    // First check our session state
-    if (state && state.currentAction === "login") {
-      switch (state.loginStep) {
-        case "email":
-          logger.debug(
-            `[handleUserInput] Processing email input for ${chatId} from session state`
-          );
-          await this.handleEmailInput(bot, msg);
-          return;
-        case "otp":
-          logger.debug(
-            `[handleUserInput] Processing OTP input for ${chatId} from session state`
-          );
-          await this.handleOTPInput(bot, msg);
-          return;
-        default:
-          logger.warn(
-            `[handleUserInput] Unknown login step: ${state.loginStep}`
-          );
+    // Get session state directly
+    const sessionState = SessionService.getSessionState(chatId);
+    logger.debug(
+      `[handleUserInput] Session state for ${chatId}:`,
+      sessionState
+    );
+
+    // First check if this is a login flow from session state
+    if (sessionState?.currentAction === "login") {
+      logger.debug(`[handleUserInput] Found login action in session state`);
+
+      // Make sure data exists with default empty object
+      const loginData = sessionState.data as LoginSessionState;
+
+      // Determine which step we're in
+      if (loginData.loginStep === "email") {
+        logger.debug(
+          `[handleUserInput] Processing email input from session state`
+        );
+        await this.handleEmailInput(bot, msg);
+        return;
+      } else if (loginData.loginStep === "otp") {
+        logger.debug(
+          `[handleUserInput] Processing OTP input from session state`
+        );
+        await this.handleOTPInput(bot, msg);
+        return;
+      } else {
+        logger.warn(
+          `[handleUserInput] Unknown login step in session: ${loginData.loginStep}`
+        );
       }
     }
 
-    // Fallback to the old tracking mechanism
+    // Fallback to the old tracking mechanism if session state doesn't have what we need
     if (this.awaitingEmail.has(chatId)) {
       logger.debug(
-        `[handleUserInput] Processing email input for ${chatId} from awaitingEmail map`
+        `[handleUserInput] Processing email input from awaitingEmail map`
       );
+
+      // Make sure session state is set properly
+      SessionService.updateSessionState(chatId, {
+        currentAction: "login",
+        data: {
+          loginStep: "email",
+        },
+      });
+
       await this.handleEmailInput(bot, msg);
       return;
     }
 
     if (this.awaitingOTP.has(chatId)) {
       logger.debug(
-        `[handleUserInput] Processing OTP input for ${chatId} from awaitingOTP map`
+        `[handleUserInput] Processing OTP input from awaitingOTP map`
       );
+
+      // Make sure session state is set properly
+      const otpState = this.awaitingOTP.get(chatId);
+      if (otpState) {
+        SessionService.updateSessionState(chatId, {
+          currentAction: "login",
+          data: {
+            loginStep: "otp",
+            email: otpState.email,
+            sid: otpState.sid,
+          },
+        });
+      }
+
       await this.handleOTPInput(bot, msg);
       return;
     }
 
     logger.debug(
-      `[handleUserInput] Ignoring input: Not in login flow. Current action: ${state?.currentAction}`
+      `[handleUserInput] Ignoring input: Not in login flow. Current action: ${sessionState?.currentAction}`
     );
   }
 
@@ -250,18 +311,25 @@ export class LoginCommand extends BaseAuthCommand {
         email
       );
 
-      // Store email and sid in session state
-      this.updateSessionData<LoginSessionState>(chatId, {
+      // Store email and sid directly in session state with proper structure
+      const updateResult = SessionService.updateSessionState(chatId, {
         currentAction: "login",
-        loginStep: "otp",
-        email: response.email,
-        sid: response.sid,
+        data: {
+          loginStep: "otp",
+          email: response.email,
+          sid: response.sid,
+        },
       });
+
+      // Log the update result and session state
+      logger.debug(`[handleEmailInput] Session update result: ${updateResult}`);
+      const updatedState = SessionService.getSessionState(chatId);
+      logger.debug(`[handleEmailInput] Updated session state:`, updatedState);
 
       // Clean up email tracking
       this.awaitingEmail.delete(chatId);
 
-      // Store OTP state in local map
+      // Store OTP state in local map for backward compatibility
       this.awaitingOTP.set(chatId, {
         email: response.email,
         sid: response.sid,
@@ -283,7 +351,8 @@ export class LoginCommand extends BaseAuthCommand {
       logger.error(`OTP request error:`, error);
       handleApiErrorResponse(bot, chatId, error, "action:login");
       this.awaitingEmail.delete(chatId);
-      this.clearSessionData(chatId);
+      // Clear session state directly
+      SessionService.updateSessionState(chatId, {});
     }
   }
 
@@ -297,8 +366,42 @@ export class LoginCommand extends BaseAuthCommand {
     const chatId = msg.chat.id;
     const otp = msg.text?.trim();
 
+    // Get both from session state and local map for comprehensive check
+    const sessionState = SessionService.getSessionState(chatId);
     const otpState = this.awaitingOTP.get(chatId);
-    if (!otpState) return;
+
+    // First try to get credentials from session state
+    let email: string | undefined;
+    let sid: string | undefined;
+
+    // Safely extract data from session if it exists
+    if (sessionState?.data) {
+      email = sessionState.data.email;
+      sid = sessionState.data.sid;
+    }
+
+    // Fallback to map if not in session
+    if (!email || !sid) {
+      if (!otpState) {
+        logger.error(`[handleOTPInput] No OTP state found for chat ${chatId}`);
+        bot.sendMessage(
+          chatId,
+          "⚠️ Your OTP session has expired. Please start the login process again.",
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "🔑 Login Again", callback_data: "action:login" }],
+                [{ text: "« Back to Menu", callback_data: "menu:main" }],
+              ],
+            },
+          }
+        );
+        return;
+      }
+
+      email = otpState.email;
+      sid = otpState.sid;
+    }
 
     if (!otp || !this.isValidOTP(otp)) {
       bot.sendMessage(chatId, "⚠️ Please enter a valid OTP code.", {
@@ -314,9 +417,9 @@ export class LoginCommand extends BaseAuthCommand {
     try {
       // Authenticate with OTP
       const authResponse: AuthResponse = await authService.authenticateWithOTP(
-        otpState.email,
+        email,
         otp,
-        otpState.sid
+        sid
       );
 
       // Create user session
@@ -330,7 +433,7 @@ export class LoginCommand extends BaseAuthCommand {
 
       // Clean up tracking state
       this.awaitingOTP.delete(chatId);
-      this.clearSessionData(chatId);
+      SessionService.updateSessionState(chatId, {}); // Clear session state
 
       // Setup notification subscriptions using the NotificationCommand
       try {
@@ -356,7 +459,7 @@ export class LoginCommand extends BaseAuthCommand {
       logger.error(`Authentication error:`, error);
       handleApiErrorResponse(bot, chatId, error, "action:login");
       this.awaitingOTP.delete(chatId);
-      this.clearSessionData(chatId);
+      SessionService.updateSessionState(chatId, {}); // Clear session state
     }
   }
 
