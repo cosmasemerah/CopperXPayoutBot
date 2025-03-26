@@ -384,9 +384,6 @@ export class LoginCommand extends BaseAuthCommand {
 export function registerLoginMessageHandlers(bot: TelegramBot): void {
   const loginCommand = new LoginCommand();
 
-  // Register the login command for handling messages
-  commandRegistry.registerCommand(loginCommand);
-
   // Register callback handlers
   commandRegistry.registerCallbackHandler("action:login", loginCommand);
   commandRegistry.registerCallbackHandler("login", loginCommand);

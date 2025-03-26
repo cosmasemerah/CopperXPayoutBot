@@ -90,33 +90,22 @@ export abstract class BaseAuthCommand implements BotCommand {
   }
 
   /**
-   * Get session data with type safety
-   * @param chatId The chat ID to get session data for
-   * @returns The typed session data or undefined if not found
+   * Get session data for this command
+   * @returns Session data or undefined if not found
    */
-  protected getSessionData<T extends AuthSessionState>(
+  protected getSessionData<T extends SessionState>(
     chatId: number
   ): T | undefined {
     const sessionState = SessionService.getSessionState(chatId);
-    logger.debug(
-      `[getSessionData] Raw session state for ${chatId}:`,
-      sessionState
-    );
-
-    // If we have a session state with data, use it
-    if (sessionState?.data) {
-      logger.debug(`[getSessionData] Using data property for ${chatId}`);
-      return sessionState.data as T;
+    if (!sessionState) {
+      logger.debug(`No session state found for chat ${chatId}`);
+      return undefined;
     }
 
-    // Otherwise, try to use the session state itself (for backward compatibility)
-    if (sessionState) {
-      logger.debug(`[getSessionData] Using session state itself for ${chatId}`);
-      return sessionState as T;
-    }
+    // Log the session state for debugging
+    logger.debug(`Retrieved session state for chat ${chatId}:`, sessionState);
 
-    logger.debug(`[getSessionData] No session state found for ${chatId}`);
-    return undefined;
+    return sessionState as T;
   }
 
   /**

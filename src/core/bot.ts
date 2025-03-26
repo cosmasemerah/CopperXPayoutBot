@@ -140,16 +140,31 @@ export function startBot(): TelegramBot {
       const session = SessionService.getSessionState(chatId);
       logger.debug(`Current session state:`, session);
 
-      // Try each command's handleUserInput method
-      const commands = commandRegistry.getCommands();
-      for (const command of commands) {
-        if (command.handleUserInput) {
-          try {
-            await command.handleUserInput(bot, msg);
-          } catch (error: any) {
-            logger.error(`Error in ${command.name}.handleUserInput:`, error);
+      if (session && session.currentAction) {
+        // Prioritize routing based on currentAction
+        logger.debug(
+          `Routing based on currentAction: ${session.currentAction}`
+        );
+
+        // Try to find a command that can handle this action
+        let handled = false;
+        const commands = commandRegistry.getCommands();
+        for (const command of commands) {
+          if (command.handleUserInput) {
+            try {
+              // Let each command check if it should handle this message based on session state
+              await command.handleUserInput(bot, msg);
+              // We don't break here because multiple commands might need to process the message
+              // Each command is responsible for checking if it should process the message
+            } catch (error: any) {
+              logger.error(`Error in ${command.name}.handleUserInput:`, error);
+            }
           }
         }
+      } else {
+        logger.debug(
+          `No currentAction in session, skipping message processing`
+        );
       }
     } catch (error: any) {
       logger.error(`Error in global message handler:`, error);

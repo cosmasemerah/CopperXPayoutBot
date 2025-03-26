@@ -62,7 +62,14 @@ export class CommandRegistry {
    * @param command The command to register
    */
   registerCommand(command: BotCommand): void {
+    if (this.commands.has(command.name)) {
+      logger.warn(
+        `Command /${command.name} is being registered more than once`
+      );
+    }
+
     this.commands.set(command.name, command);
+    logger.debug(`Registered command: /${command.name}`);
 
     // If no pattern is provided, create default pattern
     if (!command.pattern) {

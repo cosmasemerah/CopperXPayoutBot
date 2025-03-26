@@ -120,53 +120,9 @@ export function registerTransferCommands(_bot: TelegramBot): void {
 export function registerTransferMessageHandlers(bot: TelegramBot): void {
   logger.info("Registering transfer message handlers...");
 
-  // Create command instances
-  const emailTransferCommand = new EmailTransferCommand();
-  const walletTransferCommand = new WalletTransferCommand();
-  const bankWithdrawalCommand = new BankWithdrawalCommand();
-  const batchTransferCommand = new BatchTransferCommand();
-  const depositCommand = new DepositCommand();
-  const payeeCommand = new PayeeCommand();
-
-  // Register message handler
-  bot.on("message", async (msg) => {
-    if (!msg.text) return;
-
-    const chatId = msg.chat.id;
-    const session = SessionService.getSession(chatId);
-
-    if (!session || !session.state || !session.state.currentAction) return;
-
-    // Route message based on current action
-    switch (session.state.currentAction) {
-      case "sendemail":
-        await emailTransferCommand.handleUserInput(bot, msg);
-        break;
-
-      case "sendwallet":
-        await walletTransferCommand.handleUserInput(bot, msg);
-        break;
-
-      case "withdrawbank":
-        await bankWithdrawalCommand.handleUserInput(bot, msg);
-        break;
-
-      case "sendbatch":
-        await batchTransferCommand.handleUserInput(bot, msg);
-        break;
-
-      case "deposit":
-        // Handle only if deposit command has user input handling
-        if ("handleUserInput" in depositCommand) {
-          await depositCommand.handleUserInput(bot, msg);
-        }
-        break;
-
-      case "addpayee":
-        await payeeCommand.handleUserInput(bot, msg);
-        break;
-    }
-  });
+  // Create shared command instances for use in the main bot message handler
+  // These should be the same instances that were registered in registerTransferCommands
+  // Don't register additional message handlers - rely on the global handler in bot.ts
 
   // Register payee-specific message handlers
   registerPayeeMessageHandlers(bot);
