@@ -135,8 +135,15 @@ export function startBot(): TelegramBot {
     const chatId = msg.chat.id;
     logger.debug(`Processing message: "${msg.text}" from chat ${chatId}`);
 
+    // Check if there is an active callback query, if so, skip user input handling
+    if (bot.isPolling() && bot.callbacks[msg.message_id]) {
+      logger.debug(`Skipping message handling due to active callback query.`);
+      return;
+    }
+
     try {
-      // Get session state to determine current action
+      // Get session state. If there is no session state or no currentAction, skip the handleUserInput
+      // If there is no message text, skip the handleUserInput
       const session = SessionService.getSessionState(chatId);
       logger.debug(`Current session state:`, session);
 
@@ -161,10 +168,6 @@ export function startBot(): TelegramBot {
             }
           }
         }
-      } else {
-        logger.debug(
-          `No currentAction in session, skipping message processing`
-        );
       }
     } catch (error: any) {
       logger.error(`Error in global message handler:`, error);
